@@ -17,7 +17,6 @@ from .config import (
     ExecutionConfig,
     PatchLabConfig,
     is_pinned_container_image,
-    load_config,
     load_config_text,
 )
 from .diffparse import align_file_diffs, parse_unified_diff
@@ -120,8 +119,8 @@ class VerificationEngine:
         diffs = align_file_diffs(parsed_diffs, changed_files)
         relative_config = _relative_config_path(request.config_path)
         if relative_config is not None:
-            before = repo.file_at(base_sha, relative_config)
-            after = repo.file_at(head_sha, relative_config)
+            before = repo.file_bytes_at(base_sha, relative_config)
+            after = repo.file_bytes_at(head_sha, relative_config)
             if before != after:
                 findings.append(
                     Finding(
@@ -298,7 +297,7 @@ class VerificationEngine:
 
         findings: list[Finding] = []
         try:
-            executor = select_executor(execution)
+            executor = select_executor(execution, untrusted_root=repo.path)
         except ExecutionUnavailable as exc:
             findings.append(
                 Finding(
@@ -431,18 +430,20 @@ def _load_config(
     if source not in {"base", "head", "working-tree"}:
         raise ConfigError("config source must be base, head, or working-tree")
     if source == "working-tree":
-        actual = config_path if config_path.is_absolute() else repo.path / config_path
+        actual = _trusted_working_tree_config(repo.path, config_path)
         try:
             text = actual.read_text(encoding="utf-8")
         except FileNotFoundError as exc:
             raise ConfigError(f"configuration file not found: {actual}") from exc
-        return load_config(actual), text, str(actual)
+        except UnicodeDecodeError as exc:
+            raise ConfigError(f"configuration file is not valid UTF-8: {actual}") from exc
+        return load_config_text(text, source=str(actual)), text, str(actual)
 
     relative = _relative_config_path(config_path)
     if relative is None:
         raise ConfigError("a base or head configuration path must be relative to the repository")
     ref = base_sha if source == "base" else head_sha
-    text = repo.file_at(ref, relative)
+    text = repo.utf8_file_at(ref, relative)
     if text is None:
         raise ConfigError(f"configuration file not found at {source}:{relative}")
     return load_config_text(text, source=f"{source}:{relative}"), text, f"{source}:{relative}"
@@ -455,6 +456,32 @@ def _relative_config_path(path: Path) -> str | None:
     if not normalized.parts or ".." in normalized.parts:
         raise ConfigError("configuration path must stay inside the repository")
     return normalized.as_posix()
+
+
+def _trusted_working_tree_config(root: Path, config_path: Path) -> Path:
+    repository = root.resolve()
+    candidate = config_path if config_path.is_absolute() else repository / config_path
+    lexical = Path(os.path.abspath(candidate))
+    try:
+        relative = lexical.relative_to(repository)
+    except ValueError as exc:
+        raise ConfigError("working-tree configuration must stay inside the repository") from exc
+    current = repository
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise ConfigError("working-tree configuration path must not contain symbolic links")
+    try:
+        resolved = lexical.resolve(strict=True)
+    except FileNotFoundError:
+        return lexical
+    try:
+        resolved.relative_to(repository)
+    except ValueError as exc:
+        raise ConfigError("working-tree configuration must stay inside the repository") from exc
+    if not resolved.is_file():
+        raise ConfigError(f"configuration path is not a regular file: {resolved}")
+    return resolved
 
 
 def _outcome(findings: list[Finding], fail_on_review: bool) -> Outcome:

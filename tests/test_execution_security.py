@@ -17,6 +17,7 @@ from patchlab_commons.runner import (
     _container_command,
     _resolve_native_command,
     _runtime_environment,
+    _write_container_environment_file,
     run_command,
     sanitized_environment,
     select_executor,
@@ -64,6 +65,9 @@ class ExecutionSecurityTests(unittest.TestCase):
                 select_executor(config)
 
     def test_container_selection_preserves_limits(self) -> None:
+        runtime = Path(tempfile.mkdtemp()) / "docker"
+        runtime.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        runtime.chmod(0o755)
         config = ExecutionConfig(
             mode="container",
             container_runtime="docker",
@@ -74,9 +78,9 @@ class ExecutionSecurityTests(unittest.TestCase):
             pids_limit=32,
             tmpfs_mb=16,
         )
-        with patch("patchlab_commons.runner.shutil.which", return_value="/usr/bin/docker"):
+        with patch("patchlab_commons.runner.shutil.which", return_value=str(runtime)):
             selected = select_executor(config)
-        self.assertEqual(selected.runtime_path, "/usr/bin/docker")
+        self.assertEqual(selected.runtime_path, str(runtime.resolve()))
         self.assertEqual(selected.label, "container:docker")
         self.assertTrue(selected.network)
         self.assertEqual(selected.memory_mb, 512)
@@ -101,19 +105,31 @@ class ExecutionSecurityTests(unittest.TestCase):
             tmpfs_mb=12,
         )
         with patch.dict(os.environ, {"SAFE_VALUE": "not-in-argv"}, clear=False):
-            argv = _container_command(selected, workspace, "patchlab-test", command_config)
+            runtime_home = Path(tempfile.mkdtemp())
+            env_file = _write_container_environment_file(runtime_home, ("SAFE_VALUE",))
+            workspace.chmod(0o755)
+            argv = _container_command(
+                selected,
+                workspace,
+                "patchlab-test",
+                command_config,
+                environment_file=env_file,
+            )
         rendered = "\n".join(argv)
         self.assertIn("--network\nnone", rendered)
         self.assertIn("--cap-drop=ALL", argv)
-        self.assertIn("--security-opt=no-new-privileges", argv)
+        self.assertIn("--security-opt=no-new-privileges=true", argv)
         self.assertIn("--read-only", argv)
         self.assertIn("--pids-limit\n24", rendered)
         self.assertIn("--memory\n256m", rendered)
+        self.assertIn("--memory-swap\n256m", rendered)
+        self.assertIn("--shm-size\n16m", rendered)
         self.assertIn("--cpus\n0.5", rendered)
         self.assertIn("--user\n65532:65532", rendered)
         self.assertIn(f"{workspace.resolve()}:/workspace:ro", argv)
         self.assertNotIn("docker.sock", rendered)
-        self.assertIn("SAFE_VALUE", argv)
+        self.assertIn("--env-file", argv)
+        self.assertIn(str(env_file), argv)
         self.assertNotIn("not-in-argv", rendered)
         self.assertEqual(argv[-3:], [_DIGEST_IMAGE, "python", "-V"])
 
@@ -130,6 +146,7 @@ class ExecutionSecurityTests(unittest.TestCase):
             pids_limit=16,
             tmpfs_mb=8,
         )
+        workspace.chmod(0o755)
         argv = _container_command(
             selected,
             workspace,
@@ -139,17 +156,32 @@ class ExecutionSecurityTests(unittest.TestCase):
         index = argv.index("--network")
         self.assertEqual(argv[index + 1], "bridge")
 
-    def test_runtime_environment_exposes_only_allowed_values(self) -> None:
+    def test_runtime_environment_does_not_inherit_allowed_child_values(self) -> None:
         home = Path(tempfile.mkdtemp())
         with patch.dict(
             os.environ,
-            {"SAFE_VALUE": "visible", "DEMO_TOKEN": "hidden"},
+            {"SAFE_VALUE": "visible", "DOCKER_HOST": "tcp://attacker"},
             clear=False,
         ):
-            environment = _runtime_environment(home, ("SAFE_VALUE",))
-        self.assertEqual(environment["SAFE_VALUE"], "visible")
-        self.assertNotIn("DEMO_TOKEN", environment)
+            environment = _runtime_environment(home)
+        self.assertNotIn("SAFE_VALUE", environment)
+        self.assertNotIn("DOCKER_HOST", environment)
         self.assertEqual(environment["DOCKER_CONFIG"], str(home / ".docker"))
+
+    def test_container_child_values_use_a_private_env_file(self) -> None:
+        home = Path(tempfile.mkdtemp())
+        with patch.dict(os.environ, {"SAFE_VALUE": "visible=1"}, clear=False):
+            path = _write_container_environment_file(home, ("SAFE_VALUE", "MISSING"))
+        self.assertIsNotNone(path)
+        assert path is not None
+        self.assertEqual(path.read_text(encoding="utf-8"), "SAFE_VALUE=visible=1\n")
+        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_container_env_file_rejects_multiline_values(self) -> None:
+        home = Path(tempfile.mkdtemp())
+        with patch.dict(os.environ, {"SAFE_VALUE": "first\nsecond"}, clear=False):
+            with self.assertRaisesRegex(ExecutionUnavailable, "represented safely"):
+                _write_container_environment_file(home, ("SAFE_VALUE",))
 
     def test_relative_native_program_cannot_escape_snapshot(self) -> None:
         parent = Path(tempfile.mkdtemp())
@@ -175,6 +207,7 @@ class ExecutionSecurityTests(unittest.TestCase):
             CommandConfig(name="children", command=(sys.executable, "-c", code)),
             "head",
             cwd,
+            ExecutorSelection(mode="native", network=True),
         )
         self.assertTrue(result.passed, result.stderr)
         time.sleep(1.2)
@@ -186,12 +219,40 @@ class ExecutionSecurityTests(unittest.TestCase):
         self.assertTrue(Path(resolved[0]).is_absolute())
         self.assertEqual(resolved[1], "-V")
 
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixtures are required")
+    def test_bare_native_program_cannot_be_spoofed_by_the_snapshot(self) -> None:
+        cwd = Path(tempfile.mkdtemp())
+        fake = cwd / "python"
+        fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        with self.assertRaisesRegex(ExecutionUnavailable, "inside the untrusted snapshot"):
+            _resolve_native_command(("python", "-V"), cwd, {"PATH": str(cwd)})
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixtures are required")
+    def test_container_runtime_cannot_be_spoofed_by_the_repository(self) -> None:
+        repo = Path(tempfile.mkdtemp())
+        fake = repo / "docker"
+        fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        config = ExecutionConfig(mode="container", container_image=_DIGEST_IMAGE)
+        with patch("patchlab_commons.runner.shutil.which", return_value=str(fake)):
+            with self.assertRaisesRegex(ExecutionUnavailable, "untrusted repository"):
+                select_executor(config, untrusted_root=repo)
+
 
 class ContainerRuntimeBehaviorTests(unittest.TestCase):
     def _runtime(self, body: str) -> Path:
         directory = Path(tempfile.mkdtemp())
         runtime = directory / "fake-runtime"
-        runtime.write_text("#!/usr/bin/env python3\n" + body, encoding="utf-8")
+        runtime.write_text(
+            "#!/usr/bin/env python3\nimport sys\n"
+            + body
+            + "\nif len(sys.argv) > 1 and sys.argv[1] == 'rm':\n"
+            + "    raise SystemExit(0)\n"
+            + "if len(sys.argv) > 1 and sys.argv[1] == 'ps':\n"
+            + "    raise SystemExit(0)\n",
+            encoding="utf-8",
+        )
         runtime.chmod(0o755)
         return runtime
 
@@ -218,6 +279,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
             "    print('stderr-value', file=sys.stderr)\n"
         )
         cwd = Path(tempfile.mkdtemp())
+        cwd.chmod(0o755)
         result = run_command(
             CommandConfig(name="container", command=("python", "-V")),
             "head",
@@ -240,6 +302,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
             "    time.sleep(5)\n"
         )
         cwd = Path(tempfile.mkdtemp())
+        cwd.chmod(0o755)
         result = run_command(
             CommandConfig(
                 name="container-timeout",
@@ -254,18 +317,48 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertIn("removed the isolated container", result.stderr)
 
-    def test_missing_container_runtime_is_reported_as_launch_error(self) -> None:
+    def test_missing_container_runtime_is_rejected_before_execution(self) -> None:
         cwd = Path(tempfile.mkdtemp())
+        cwd.chmod(0o755)
         selected = self._selection(cwd / "missing-runtime")
+        with self.assertRaisesRegex(ExecutionUnavailable, "not an executable regular file"):
+            run_command(
+                CommandConfig(name="container-missing", command=("true",)),
+                "head",
+                cwd,
+                selected,
+            )
+
+    def test_unreadable_snapshot_is_rejected_before_container_launch(self) -> None:
+        runtime = self._runtime("")
+        cwd = Path(tempfile.mkdtemp())
+        cwd.chmod(0o700)
+        with self.assertRaisesRegex(ExecutionUnavailable, "unprivileged container user"):
+            run_command(
+                CommandConfig(name="permissions", command=("true",)),
+                "head",
+                cwd,
+                self._selection(runtime),
+            )
+
+    def test_cleanup_must_be_verified(self) -> None:
+        runtime = self._runtime(
+            "if len(sys.argv) > 1 and sys.argv[1] == 'ps':\n"
+            "    value = next(item for item in sys.argv if item.startswith('name='))\n"
+            "    print(value.removeprefix('name='))\n"
+            "    raise SystemExit(0)\n"
+        )
+        cwd = Path(tempfile.mkdtemp())
+        cwd.chmod(0o755)
         result = run_command(
-            CommandConfig(name="container-missing", command=("true",)),
+            CommandConfig(name="cleanup", command=("true",)),
             "head",
             cwd,
-            selected,
+            self._selection(runtime),
         )
         self.assertFalse(result.passed)
         self.assertIsNone(result.exit_code)
-        self.assertIn("could not start container runtime", result.stderr)
+        self.assertIn("still exists", result.stderr)
 
     def test_container_path_with_colon_is_rejected(self) -> None:
         workspace = Path(tempfile.mkdtemp()) / "bad:path"

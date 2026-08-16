@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -115,6 +116,51 @@ class EngineExecutionTests(unittest.TestCase):
                 )
                 with self.assertRaises(ConfigError):
                     VerificationEngine().verify(request)
+
+    def test_working_tree_config_cannot_escape_the_repository(self) -> None:
+        repo, base, head = self._repo(
+            """[project]\nname = \"inside\"\n[scope]\nallow = [\"**\"]\n[policy]\n"""
+        )
+        outside = Path(tempfile.mkdtemp()) / "outside.toml"
+        outside.write_text(
+            """[project]\nname = \"outside\"\n[scope]\nallow = [\"**\"]\n[policy]\n""",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ConfigError, "stay inside"):
+            VerificationEngine().verify(
+                VerificationRequest(
+                    repo,
+                    outside,
+                    base,
+                    head,
+                    Path("out"),
+                    config_source="working-tree",
+                )
+            )
+
+    @unittest.skipIf(os.name == "nt", "symbolic-link creation is not reliable on Windows")
+    def test_working_tree_config_rejects_symbolic_links(self) -> None:
+        repo, base, head = self._repo(
+            """[project]\nname = \"inside\"\n[scope]\nallow = [\"**\"]\n[policy]\n"""
+        )
+        target = repo / "trusted.toml"
+        target.write_text(
+            """[project]\nname = \"linked\"\n[scope]\nallow = [\"**\"]\n[policy]\n""",
+            encoding="utf-8",
+        )
+        link = repo / "linked.toml"
+        link.symlink_to(target.name)
+        with self.assertRaisesRegex(ConfigError, "symbolic links"):
+            VerificationEngine().verify(
+                VerificationRequest(
+                    repo,
+                    Path("linked.toml"),
+                    base,
+                    head,
+                    Path("out"),
+                    config_source="working-tree",
+                )
+            )
 
 
 if __name__ == "__main__":

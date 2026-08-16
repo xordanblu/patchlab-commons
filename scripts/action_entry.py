@@ -126,6 +126,23 @@ def main() -> int:
     config_source = _choice(
         "PATCHLAB_CONFIG_SOURCE", {"base", "head", "working-tree"}, "base"
     )
+    config_input = Path(os.environ.get("PATCHLAB_CONFIG", "patchlab.toml"))
+    if config_source == "working-tree":
+        config_path = _inside(
+            repository,
+            config_input if config_input.is_absolute() else repository / config_input,
+            "working-tree configuration",
+        )
+    else:
+        if config_input.is_absolute():
+            raise ValueError("base or head configuration must be relative to the repository")
+        config_path = config_input
+    output_input = Path(os.environ.get("PATCHLAB_OUTPUT", ".patchlab/out"))
+    output_dir = _inside(
+        repository,
+        output_input if output_input.is_absolute() else repository / output_input,
+        "output directory",
+    )
     execution_mode = _choice(
         "PATCHLAB_EXECUTION_MODE", {"auto", "static", "container"}, "static"
     )
@@ -138,10 +155,10 @@ def main() -> int:
     result = VerificationEngine().verify(
         VerificationRequest(
             repository=repository,
-            config_path=Path(os.environ.get("PATCHLAB_CONFIG", "patchlab.toml")),
+            config_path=config_path,
             base_ref=_required("PATCHLAB_BASE"),
             head_ref=_required("PATCHLAB_HEAD"),
-            output_dir=Path(os.environ.get("PATCHLAB_OUTPUT", ".patchlab/out")),
+            output_dir=output_dir,
             fail_on_review=_boolean("PATCHLAB_FAIL_ON_REVIEW", True),
             config_source=config_source,
             execution_mode=execution_mode,

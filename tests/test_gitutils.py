@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from patchlab_commons.gitutils import GitRepo, _public_repository_identifier
+from patchlab_commons.gitutils import GitError, GitRepo, _public_repository_identifier
 
 from tests.helpers import commit_all, git, init_repo
 
@@ -71,6 +71,30 @@ class GitUtilsTests(unittest.TestCase):
             self.assertIsNone(changed[0].added_lines)
             self.assertIsNone(changed[0].deleted_lines)
 
+    def test_gitattributes_cannot_hide_text_changes_as_binary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp) / "repo"
+            init_repo(repo)
+            workflow = repo / ".github" / "workflows" / "ci.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("name: CI\non: [push]\n", encoding="utf-8")
+            (repo / ".gitattributes").write_text("*.yml binary\n", encoding="utf-8")
+            base = commit_all(repo, "base")
+            workflow.write_text(
+                "name: CI\non: [pull_request_target]\npermissions: write-all\n",
+                encoding="utf-8",
+            )
+            head = commit_all(repo, "head")
+
+            adapter = GitRepo(repo)
+            changed = adapter.changed_files(base, head)
+            diff = adapter.unified_diff(base, head)
+
+            item = next(entry for entry in changed if entry.path.endswith("ci.yml"))
+            self.assertFalse(item.binary)
+            self.assertIn("+on: [pull_request_target]", diff)
+            self.assertIn("+permissions: write-all", diff)
+
     def test_repository_identifier_removes_https_credentials(self) -> None:
         value = _public_repository_identifier(
             "https://user:very-secret-token@github.com/example/project.git?token=hidden"
@@ -96,6 +120,17 @@ class GitUtilsTests(unittest.TestCase):
             adapter = GitRepo(repo)
             self.assertEqual(adapter.file_at(sha, "empty.txt"), "")
             self.assertIsNone(adapter.file_at(sha, "missing.txt"))
+
+    def test_utf8_file_at_rejects_invalid_text(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp) / "repo"
+            init_repo(repo)
+            (repo / "invalid.toml").write_bytes(b"project = \xff\n")
+            sha = commit_all(repo, "invalid UTF-8")
+            adapter = GitRepo(repo)
+            self.assertIn("\ufffd", adapter.file_at(sha, "invalid.toml") or "")
+            with self.assertRaisesRegex(GitError, "not valid UTF-8"):
+                adapter.utf8_file_at(sha, "invalid.toml")
 
     def test_repository_identifier_tolerates_invalid_port(self) -> None:
         value = _public_repository_identifier("https://user:secret@example.com:notaport/project.git")

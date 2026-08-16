@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import tempfile
 import threading
@@ -76,7 +77,9 @@ class ExecutorSelection:
         return self.mode
 
 
-def select_executor(config: ExecutionConfig) -> ExecutorSelection:
+def select_executor(
+    config: ExecutionConfig, untrusted_root: Path | None = None
+) -> ExecutorSelection:
     """Resolve one explicit command-execution boundary.
 
     Auto mode never falls back to native execution unless the trusted policy
@@ -103,7 +106,9 @@ def select_executor(config: ExecutionConfig) -> ExecutorSelection:
             "auto mode cannot provide isolated container execution on this host"
         )
 
-    runtime_name, runtime_path = _find_container_runtime(config.container_runtime)
+    runtime_name, runtime_path = _find_container_runtime(
+        config.container_runtime, untrusted_root=untrusted_root
+    )
     if runtime_path and config.container_image:
         return ExecutorSelection(
             mode="container",
@@ -178,7 +183,7 @@ def run_command(
     cwd: Path,
     executor: ExecutorSelection | None = None,
 ) -> CommandResult:
-    selected = executor or ExecutorSelection(mode="native")
+    selected = executor or ExecutorSelection(mode="static")
     if selected.mode == "native":
         return _run_native_command(config, phase, cwd)
     if selected.mode == "container":
@@ -275,6 +280,7 @@ def _run_container_command(
 ) -> CommandResult:
     if os.name == "nt" or not sys_platform_linux():
         raise ExecutionUnavailable("container execution is currently supported only on Linux hosts")
+    _validate_external_executable(executor.runtime_path, cwd, "container runtime")
 
     started = time.monotonic()
     timed_out = False
@@ -283,11 +289,15 @@ def _run_container_command(
     name = f"patchlab-{os.getpid()}-{uuid.uuid4().hex[:12]}"
     stdout_capture = _BoundedCapture()
     stderr_capture = _BoundedCapture()
+    cleanup_error = ""
 
     with tempfile.TemporaryDirectory(prefix="patchlab-runtime-home-") as runtime_home_raw:
         runtime_home = Path(runtime_home_raw)
-        runtime_env = _runtime_environment(runtime_home, config.allow_env)
-        command = _container_command(executor, cwd, name, config)
+        runtime_env = _runtime_environment(runtime_home)
+        environment_file = _write_container_environment_file(runtime_home, config.allow_env)
+        command = _container_command(
+            executor, cwd, name, config, environment_file=environment_file
+        )
         process: subprocess.Popen[bytes] | None = None
         threads: tuple[threading.Thread, threading.Thread] = ()
         try:
@@ -305,13 +315,22 @@ def _run_container_command(
                 exit_code = process.wait(timeout=config.timeout_seconds)
             except subprocess.TimeoutExpired:
                 timed_out = True
-                _remove_container(executor.runtime_path, name, runtime_env)
+                cleanup_ok, cleanup_detail = _remove_container(
+                    executor.runtime_path, name, runtime_env
+                )
+                if not cleanup_ok:
+                    cleanup_error = cleanup_detail
                 _terminate_process_tree(process)
                 exit_code = process.returncode
         except OSError as exc:
             launch_error = f"could not start container runtime: {exc}"
         finally:
-            _remove_container(executor.runtime_path, name, runtime_env)
+            if process is not None:
+                cleanup_ok, cleanup_detail = _remove_container(
+                    executor.runtime_path, name, runtime_env
+                )
+                if not cleanup_ok:
+                    cleanup_error = cleanup_detail
             if process is not None:
                 _finish_capture_threads(process, threads)
 
@@ -319,6 +338,9 @@ def _run_container_command(
     stderr = stderr_capture.render()
     if launch_error:
         stderr = _join_output(stderr, launch_error)
+    if cleanup_error:
+        exit_code = None
+        stderr = _join_output(stderr, cleanup_error)
     if timed_out:
         stderr = _join_output(
             stderr,
@@ -342,12 +364,19 @@ def _container_command(
     cwd: Path,
     name: str,
     config: CommandConfig,
+    *,
+    environment_file: Path | None = None,
 ) -> list[str]:
     workspace = cwd.resolve()
     if not workspace.is_dir():
         raise ExecutionUnavailable(f"snapshot directory does not exist: {workspace}")
     if ":" in os.fspath(workspace):
         raise ExecutionUnavailable("container snapshot path contains an unsupported colon")
+    mode = workspace.stat().st_mode
+    if mode & stat.S_IROTH == 0 or mode & stat.S_IXOTH == 0:
+        raise ExecutionUnavailable(
+            "container snapshot must be readable and traversable by the unprivileged container user"
+        )
 
     network = "bridge" if executor.network else "none"
     command = [
@@ -360,12 +389,14 @@ def _container_command(
         "--network",
         network,
         "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
+        "--security-opt=no-new-privileges=true",
         "--read-only",
         "--ipc=none",
         "--pids-limit",
         str(executor.pids_limit),
         "--memory",
+        f"{executor.memory_mb}m",
+        "--memory-swap",
         f"{executor.memory_mb}m",
         "--cpus",
         str(executor.cpus),
@@ -373,6 +404,8 @@ def _container_command(
         "nofile=1024:1024",
         "--ulimit",
         "core=0:0",
+        "--shm-size",
+        "16m",
         "--tmpfs",
         f"/tmp:rw,noexec,nosuid,nodev,size={executor.tmpfs_mb}m,mode=1777",
         "--tmpfs",
@@ -398,34 +431,57 @@ def _container_command(
         "--env",
         "PYTHONPATH=/workspace",
     ]
-    for key in config.allow_env:
-        if key in os.environ:
-            # Pass only the variable name. The runtime reads its value from its
-            # own sanitized environment, so credentials never enter argv.
-            command.extend(("--env", key))
+    if environment_file is not None:
+        command.extend(("--env-file", os.fspath(environment_file)))
     command.append(executor.container_image)
     command.extend(config.command)
     return command
 
-def _find_container_runtime(preference: str) -> tuple[str, str]:
+def _find_container_runtime(
+    preference: str, *, untrusted_root: Path | None = None
+) -> tuple[str, str]:
     candidates = (preference,) if preference != "auto" else ("docker", "podman")
     path = os.environ.get("PATH", os.defpath)
     for name in candidates:
         executable = shutil.which(name, path=path)
         if executable:
-            return name, os.path.abspath(executable)
+            resolved = Path(executable).resolve()
+            if not resolved.is_file() or not os.access(resolved, os.X_OK):
+                continue
+            if untrusted_root is not None and _path_is_inside(resolved, untrusted_root):
+                raise ExecutionUnavailable(
+                    f"container runtime {name!r} resolved inside the untrusted repository"
+                )
+            return name, os.fspath(resolved)
     return "", ""
 
 
-def _runtime_environment(home: Path, allow_env: tuple[str, ...] = ()) -> dict[str, str]:
+def _validate_external_executable(executable: str, workspace: Path, label: str) -> Path:
+    if not executable:
+        raise ExecutionUnavailable(f"{label} path is empty")
+    resolved = Path(executable).resolve()
+    if not resolved.is_file() or not os.access(resolved, os.X_OK):
+        raise ExecutionUnavailable(f"{label} is not an executable regular file: {resolved}")
+    if _path_is_inside(resolved, workspace):
+        raise ExecutionUnavailable(f"{label} resolved inside the untrusted snapshot")
+    return resolved
+
+
+def _path_is_inside(candidate: Path, root: Path) -> bool:
+    try:
+        candidate.resolve().relative_to(root.resolve())
+    except ValueError:
+        return False
+    return True
+
+
+def _runtime_environment(home: Path) -> dict[str, str]:
+    """Return an environment that cannot redirect the container runtime."""
+
     environment: dict[str, str] = {}
     for key in ("PATH", "SYSTEMROOT", "WINDIR", "PATHEXT", "COMSPEC", "LANG", "LC_ALL"):
         value = os.environ.get(key)
         if value:
-            environment[key] = value
-    for key in allow_env:
-        value = os.environ.get(key)
-        if value is not None:
             environment[key] = value
     environment.update(
         {
@@ -433,14 +489,44 @@ def _runtime_environment(home: Path, allow_env: tuple[str, ...] = ()) -> dict[st
             "DOCKER_CONFIG": os.fspath(home / ".docker"),
             "XDG_CONFIG_HOME": os.fspath(home / ".config"),
             "GIT_TERMINAL_PROMPT": "0",
+            "LC_ALL": "C",
+            "LANG": "C",
         }
     )
     return environment
 
 
-def _remove_container(runtime: str, name: str, environment: dict[str, str]) -> None:
+def _write_container_environment_file(home: Path, allow_env: tuple[str, ...]) -> Path | None:
+    """Write allowed child values without exposing them to the runtime process."""
+
+    values: list[str] = []
+    for key in sorted(allow_env):
+        value = os.environ.get(key)
+        if value is None:
+            continue
+        if "\x00" in value or "\n" in value or "\r" in value:
+            raise ExecutionUnavailable(
+                f"environment variable {key} cannot be represented safely in a container env file"
+            )
+        values.append(f"{key}={value}")
+    if not values:
+        return None
+    path = home / "container.env"
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write("\n".join(values) + "\n")
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return path
+
+
+def _remove_container(
+    runtime: str, name: str, environment: dict[str, str]
+) -> tuple[bool, str]:
     if not runtime:
-        return
+        return False, "container cleanup could not run because the runtime path is empty"
     try:
         subprocess.run(
             [runtime, "rm", "-f", name],
@@ -451,8 +537,38 @@ def _remove_container(runtime: str, name: str, environment: dict[str, str]) -> N
             timeout=10,
             check=False,
         )
-    except (OSError, subprocess.TimeoutExpired):
-        pass
+        inspection = subprocess.run(
+            [
+                runtime,
+                "ps",
+                "-a",
+                "--filter",
+                f"name={name}",
+                "--format",
+                "{{.Names}}",
+            ],
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+            check=False,
+        )
+    except OSError as exc:
+        return False, f"container cleanup could not be verified: {exc}"
+    except subprocess.TimeoutExpired:
+        return False, "container cleanup verification exceeded the 10-second safety limit"
+    if inspection.returncode != 0:
+        detail = inspection.stderr.decode("utf-8", errors="replace").strip()
+        return False, f"container cleanup could not be verified: {detail or 'runtime ps failed'}"
+    names = {
+        line.strip()
+        for line in inspection.stdout.decode("utf-8", errors="replace").splitlines()
+        if line.strip()
+    }
+    if name in names:
+        return False, f"container cleanup failed: {name} still exists"
+    return True, ""
 
 
 class _BoundedCapture:
@@ -560,6 +676,10 @@ def _resolve_native_command(
         if not resolved:
             raise ExecutionUnavailable(f"program was not found on PATH: {program}")
         executable = Path(resolved).resolve()
+        if _path_is_inside(executable, cwd):
+            raise ExecutionUnavailable(
+                "bare program name resolved inside the untrusted snapshot; use an explicit relative path"
+            )
     if not executable.is_file():
         raise ExecutionUnavailable(f"program is not a regular file: {executable}")
     return [os.fspath(executable), *command[1:]]

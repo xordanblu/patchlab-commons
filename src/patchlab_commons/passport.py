@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import contextlib
 import gzip
+import io
 import hashlib
 import json
 from datetime import datetime
@@ -9,8 +11,9 @@ import re
 import shutil
 import tarfile
 import tempfile
-from typing import Any
+from typing import Any, Iterator
 
+from .config import is_pinned_container_image
 from .reporting import pretty_json
 from .safeio import ensure_output_directory, replace_file, safe_write_text
 
@@ -19,6 +22,8 @@ _EXPECTED_MEMBERS = frozenset((*_REQUIRED, "passport.json"))
 _MAX_COMPRESSED_BYTES = 128 * 1024 * 1024
 _MAX_MEMBER_BYTES = 32 * 1024 * 1024
 _MAX_TOTAL_BYTES = 96 * 1024 * 1024
+_MAX_TAR_BYTES = _MAX_TOTAL_BYTES + 8 * 1024 * 1024
+_SPOOL_MEMORY_BYTES = 8 * 1024 * 1024
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _IDENTITY_KEYS_V1 = {
@@ -103,9 +108,7 @@ def create_passport_bundle(output_dir: Path, identity: dict[str, Any]) -> dict[s
 def verify_passport_bundle(bundle_path: str | Path) -> tuple[bool, dict[str, Any]]:
     path = Path(bundle_path)
     try:
-        if path.stat().st_size > _MAX_COMPRESSED_BYTES:
-            return False, {"error": "bundle exceeds the compressed size limit"}
-        with tarfile.open(path, "r:gz") as archive:
+        with _bounded_tar_archive(path) as archive:
             all_members = archive.getmembers()
             if any(not member.isfile() for member in all_members):
                 return False, {"error": "version 1 bundles may contain regular files only"}
@@ -172,7 +175,14 @@ def verify_passport_bundle(bundle_path: str | Path) -> tuple[bool, dict[str, Any
                 "identity": identity,
                 "checks": checks,
             }
-    except (OSError, tarfile.TarError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+    except (
+        OSError,
+        EOFError,
+        gzip.BadGzipFile,
+        tarfile.TarError,
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+    ) as exc:
         return False, {"error": str(exc)}
 
 
@@ -244,7 +254,41 @@ def _valid_identity(value: Any, schema_version: str) -> bool:
         return False
     if not isinstance(value.get("network_enabled"), bool):
         return False
-    return isinstance(value.get("unsafe_native_accepted"), bool)
+    if not isinstance(value.get("unsafe_native_accepted"), bool):
+        return False
+    return _valid_execution_identity(value)
+
+
+def _valid_execution_identity(value: dict[str, Any]) -> bool:
+    mode = value["execution_mode"]
+    boundary = value["execution_boundary"]
+    runtime = value["container_runtime"]
+    image = value["container_image"]
+    network = value["network_enabled"]
+    unsafe_native = value["unsafe_native_accepted"]
+    if mode == "static":
+        return (
+            boundary == "static-no-execution"
+            and runtime == ""
+            and image == ""
+            and network is False
+            and unsafe_native is False
+        )
+    if mode == "native":
+        return (
+            boundary == "weak-native"
+            and runtime == ""
+            and image == ""
+            and network is True
+            and unsafe_native is True
+        )
+    return (
+        mode == "container"
+        and boundary == "isolated-container"
+        and runtime in {"docker", "podman"}
+        and is_pinned_container_image(image)
+        and unsafe_native is False
+    )
 
 
 def _valid_verification(value: Any) -> bool:
@@ -262,6 +306,28 @@ def _valid_timestamp(value: str) -> bool:
     except ValueError:
         return False
     return parsed.tzinfo is not None
+
+
+@contextlib.contextmanager
+def _bounded_tar_archive(path: Path) -> Iterator[tarfile.TarFile]:
+    with path.open("rb") as source:
+        compressed = source.read(_MAX_COMPRESSED_BYTES + 1)
+    if len(compressed) > _MAX_COMPRESSED_BYTES:
+        raise tarfile.ReadError("bundle exceeds the compressed size limit")
+
+    with (
+        gzip.GzipFile(fileobj=io.BytesIO(compressed), mode="rb") as decoded,
+        tempfile.SpooledTemporaryFile(max_size=_SPOOL_MEMORY_BYTES, mode="w+b") as raw_tar,
+    ):
+        total = 0
+        while chunk := decoded.read(1024 * 1024):
+            total += len(chunk)
+            if total > _MAX_TAR_BYTES:
+                raise tarfile.ReadError("bundle exceeds the decompressed size limit")
+            raw_tar.write(chunk)
+        raw_tar.seek(0)
+        with tarfile.open(fileobj=raw_tar, mode="r:") as archive:
+            yield archive
 
 
 def _write_deterministic_tar_gz(target: Path, members: list[Path]) -> None:

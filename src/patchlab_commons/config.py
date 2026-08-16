@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import fnmatch
+import math
 import re
 import tomllib
 from dataclasses import dataclass, field
@@ -453,9 +454,12 @@ def _choice(value: Any, field_name: str, choices: set[str]) -> str:
 
 
 def _positive_number(value: Any, field_name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
-        raise ConfigError(f"{field_name} must be a positive number")
-    return float(value)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError(f"{field_name} must be a positive finite number")
+    number = float(value)
+    if not math.isfinite(number) or number <= 0:
+        raise ConfigError(f"{field_name} must be a positive finite number")
+    return number
 
 
 def _positive_int(value: Any, field_name: str) -> int:

@@ -71,6 +71,13 @@ class ExecutionConfigTests(unittest.TestCase):
                 with self.assertRaisesRegex(ConfigError, message):
                     load_config_text(text)
 
+    def test_non_finite_cpu_limits_are_rejected(self) -> None:
+        for value in ("nan", "+inf", "-inf"):
+            with self.subTest(value=value):
+                text = f'[project]\nname = "demo"\n[execution]\ncpus = {value}\n'
+                with self.assertRaisesRegex(ConfigError, "finite"):
+                    load_config_text(text)
+
     def test_unknown_execution_key_is_rejected(self) -> None:
         text = """[project]\nname = \"demo\"\n[execution]\nnetworking = false\n"""
         with self.assertRaisesRegex(ConfigError, "unknown key"):

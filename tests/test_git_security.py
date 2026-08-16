@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -9,8 +10,11 @@ from unittest.mock import patch
 from patchlab_commons.gitutils import (
     GitError,
     GitRepo,
+    _decode_path,
+    _git_executable,
     _git_environment,
     _parse_tree_entries,
+    _run_git_bounded,
     _validate_link_target,
     _validate_snapshot_path,
 )
@@ -81,6 +85,42 @@ class GitSecurityTests(unittest.TestCase):
                 "must be verified\n",
             )
 
+    @unittest.skipIf(os.name == "nt", "POSIX mode bits are required")
+    def test_snapshot_root_is_readable_by_the_unprivileged_container_user(self) -> None:
+        repo = Path(tempfile.mkdtemp()) / "repo"
+        init_repo(repo)
+        (repo / "file.txt").write_text("safe\n", encoding="utf-8")
+        sha = commit_all(repo, "safe")
+        with GitRepo(repo).snapshot(sha, "permissions") as snapshot:
+            mode = snapshot.stat().st_mode
+            self.assertTrue(mode & stat.S_IROTH)
+            self.assertTrue(mode & stat.S_IXOTH)
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixtures are required")
+    def test_git_executable_cannot_be_loaded_from_the_candidate_repository(self) -> None:
+        repo = Path(tempfile.mkdtemp()) / "repo"
+        repo.mkdir()
+        fake = repo / "git"
+        fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        with patch.dict(os.environ, {"PATH": str(repo)}, clear=False):
+            with self.assertRaisesRegex(GitError, "inside the untrusted repository"):
+                _git_executable(repo)
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable fixtures are required")
+    def test_git_commands_have_a_hard_timeout(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        tools = Path(tempfile.mkdtemp())
+        fake = tools / "git"
+        fake.write_text("#!/bin/sh\nsleep 5\n", encoding="utf-8")
+        fake.chmod(0o755)
+        with (
+            patch.dict(os.environ, {"PATH": f"{tools}:{os.defpath}"}, clear=False),
+            patch("patchlab_commons.gitutils._GIT_COMMAND_TIMEOUT_SECONDS", 0.1),
+        ):
+            with self.assertRaisesRegex(GitError, "safety limit"):
+                _run_git_bounded(root, ("status",), stdout_limit=1024, stderr_limit=1024)
+
     @unittest.skipIf(os.name == "nt", "symbolic-link creation is not reliable on Windows")
     def test_snapshot_rejects_symbolic_link_that_escapes_root(self) -> None:
         repo = Path(tempfile.mkdtemp()) / "repo"
@@ -110,6 +150,21 @@ class GitSecurityTests(unittest.TestCase):
             with self.assertRaisesRegex(GitError, "portable"):
                 _validate_snapshot_path(name)
 
+    def test_snapshot_rejects_windows_device_names_and_trailing_characters(self) -> None:
+        for name in ("NUL", "con.txt", "nested/COM1.log", "bad. ", "bad."):
+            with self.subTest(name=name):
+                with self.assertRaises(GitError):
+                    _validate_snapshot_path(name)
+
+    def test_tree_parser_rejects_casefold_and_unicode_collisions(self) -> None:
+        object_id = b"a" * 40
+        raw = (
+            b"100644 blob " + object_id + b" 1\tFile.txt\0"
+            b"100644 blob " + object_id + b" 1\tfile.txt\0"
+        )
+        with self.assertRaisesRegex(GitError, "colliding"):
+            _parse_tree_entries(raw)
+
     def test_snapshot_rejects_reserved_git_directory(self) -> None:
         with self.assertRaisesRegex(GitError, "reserved"):
             _validate_snapshot_path("nested/.GIT/config")
@@ -127,6 +182,10 @@ class GitSecurityTests(unittest.TestCase):
         raw = b"100644 blob " + (b"a" * 40) + b" 1\tbad-\xff\0"
         with self.assertRaisesRegex(GitError, "valid UTF"):
             _parse_tree_entries(raw)
+
+    def test_diff_path_decoder_rejects_invalid_utf8(self) -> None:
+        with self.assertRaisesRegex(GitError, "valid UTF-8"):
+            _decode_path(b"bad-\xff")
 
 
 if __name__ == "__main__":

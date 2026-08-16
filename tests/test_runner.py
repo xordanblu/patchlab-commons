@@ -7,10 +7,25 @@ import unittest
 from unittest.mock import patch
 
 from patchlab_commons.config import CommandConfig
-from patchlab_commons.runner import run_command, sanitized_environment
+from patchlab_commons.runner import (
+    ExecutionUnavailable,
+    ExecutorSelection,
+    run_command,
+    sanitized_environment,
+)
+
+_NATIVE = ExecutorSelection(mode="native", network=True)
 
 
 class RunnerTests(unittest.TestCase):
+    def test_command_execution_requires_an_explicit_executor(self) -> None:
+        with self.assertRaisesRegex(ExecutionUnavailable, "static"):
+            run_command(
+                CommandConfig(name="explicit", command=("python", "-V")),
+                "head",
+                Path(tempfile.mkdtemp()),
+            )
+
     def test_secret_environment_is_removed(self) -> None:
         with patch.dict(os.environ, {"DEMO_TOKEN": "hidden", "SAFE_VALUE": "visible"}, clear=False):
             env = sanitized_environment()
@@ -30,8 +45,8 @@ class RunnerTests(unittest.TestCase):
             run_on="both",
             expected_exit="base_nonzero_head_zero",
         )
-        self.assertTrue(run_command(command, "base", cwd).passed)
-        self.assertFalse(run_command(command, "head", cwd).passed)
+        self.assertTrue(run_command(command, "base", cwd, _NATIVE).passed)
+        self.assertFalse(run_command(command, "head", cwd, _NATIVE).passed)
 
     def test_timeout_is_reported(self) -> None:
         cwd = Path(tempfile.mkdtemp())
@@ -40,7 +55,7 @@ class RunnerTests(unittest.TestCase):
             command=("python", "-c", "import time; time.sleep(2)"),
             timeout_seconds=1,
         )
-        result = run_command(command, "head", cwd)
+        result = run_command(command, "head", cwd, _NATIVE)
         self.assertTrue(result.timed_out)
         self.assertFalse(result.passed)
         self.assertIn("terminated", result.stderr)
@@ -48,7 +63,7 @@ class RunnerTests(unittest.TestCase):
     def test_missing_program_is_reported(self) -> None:
         cwd = Path(tempfile.mkdtemp())
         command = CommandConfig(name="missing", command=("patchlab-program-that-does-not-exist",))
-        result = run_command(command, "head", cwd)
+        result = run_command(command, "head", cwd, _NATIVE)
         self.assertIsNone(result.exit_code)
         self.assertFalse(result.passed)
         self.assertIn("could not start", result.stderr)
@@ -60,7 +75,7 @@ class RunnerTests(unittest.TestCase):
             command=("python", "-c", "raise SystemExit(3)"),
             expected_exit="nonzero",
         )
-        self.assertTrue(run_command(command, "head", cwd).passed)
+        self.assertTrue(run_command(command, "head", cwd, _NATIVE).passed)
 
     def test_command_uses_disposable_home(self) -> None:
         cwd = Path(tempfile.mkdtemp())
@@ -68,7 +83,7 @@ class RunnerTests(unittest.TestCase):
             name="home",
             command=("python", "-c", "import os; print(os.environ['HOME'])"),
         )
-        result = run_command(command, "head", cwd)
+        result = run_command(command, "head", cwd, _NATIVE)
         self.assertTrue(result.passed)
         self.assertIn("patchlab-home-", result.stdout)
         self.assertNotEqual(result.stdout.strip(), os.environ.get("HOME"))
@@ -83,7 +98,7 @@ class RunnerTests(unittest.TestCase):
                 "print('Authorization: Bearer abcdefghijklmnop'); print('api_key=supersecretvalue')",
             ),
         )
-        result = run_command(command, "head", cwd)
+        result = run_command(command, "head", cwd, _NATIVE)
         self.assertTrue(result.passed)
         self.assertNotIn("abcdefghijklmnop", result.stdout)
         self.assertNotIn("supersecretvalue", result.stdout)
@@ -102,7 +117,7 @@ class RunnerTests(unittest.TestCase):
                 ),
             ),
         )
-        result = run_command(command, "head", cwd)
+        result = run_command(command, "head", cwd, _NATIVE)
         self.assertTrue(result.passed)
         self.assertNotIn("alice", result.stdout)
         self.assertNotIn("verysecret", result.stdout)
@@ -116,7 +131,7 @@ class RunnerTests(unittest.TestCase):
             name="large",
             command=("python", "-c", "print('START'); print('x' * 40000); print('END')"),
         )
-        result = run_command(command, "head", cwd)
+        result = run_command(command, "head", cwd, _NATIVE)
         self.assertTrue(result.passed)
         self.assertIn("START", result.stdout)
         self.assertIn("END", result.stdout)
