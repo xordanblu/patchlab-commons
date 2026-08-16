@@ -10,8 +10,12 @@ from typing import Any
 from .models import Disposition
 
 _ENV_NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+_PINNED_IMAGE_RE = re.compile(r"^(?:[^\s@]+@sha256:[0-9a-f]{64}|sha256:[0-9a-f]{64})$")
+_SENSITIVE_ENV_NAME_RE = re.compile(
+    r"(?i)(?:^|_)(?:AUTH|COOKIE|CREDENTIAL|KEY|PASS(?:WORD|WD)?|SECRET|TOKEN)(?:_|$)"
+)
 
-_TOP_LEVEL_KEYS = {"project", "scope", "policy", "commands"}
+_TOP_LEVEL_KEYS = {"project", "scope", "policy", "execution", "commands"}
 _PROJECT_KEYS = {"name"}
 _SCOPE_KEYS = {"allow", "deny", "max_files", "max_added_lines", "max_deleted_lines"}
 _POLICY_KEYS = {
@@ -26,6 +30,17 @@ _POLICY_KEYS = {
     "fail_on_review",
     "require_clean_worktree",
     "require_human_review",
+}
+_EXECUTION_KEYS = {
+    "mode",
+    "container_runtime",
+    "container_image",
+    "network",
+    "memory_mb",
+    "cpus",
+    "pids_limit",
+    "tmpfs_mb",
+    "allow_unsafe_native",
 }
 _COMMAND_KEYS = {
     "name",
@@ -51,6 +66,19 @@ class CommandConfig:
     timeout_seconds: int = 300
     required: bool = True
     allow_env: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionConfig:
+    mode: str = "static"
+    container_runtime: str = "auto"
+    container_image: str = ""
+    network: bool = False
+    memory_mb: int = 1024
+    cpus: float = 1.0
+    pids_limit: int = 128
+    tmpfs_mb: int = 64
+    allow_unsafe_native: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,12 +117,27 @@ class PatchLabConfig:
     commands: tuple[CommandConfig, ...] = ()
     scope: ScopeConfig = field(default_factory=ScopeConfig)
     policy: PolicyConfig = field(default_factory=PolicyConfig)
+    execution: ExecutionConfig = field(default_factory=ExecutionConfig)
 
 
 DEFAULT_CONFIG = """# PatchLab Commons configuration
 
 [project]
 name = "my-project"
+
+[execution]
+# Static mode never executes project code. Use container mode with a digest-pinned
+# image when commands must run. Native mode is a weak boundary and requires an
+# explicit opt-in.
+mode = "static"
+container_runtime = "auto"
+container_image = ""
+network = false
+memory_mb = 1024
+cpus = 1.0
+pids_limit = 128
+tmpfs_mb = 64
+allow_unsafe_native = false
 
 [scope]
 allow = ["src/**", "tests/**", "pyproject.toml", "package.json", ".github/workflows/**"]
@@ -172,6 +215,53 @@ def load_config_text(text: str, source: str = "<memory>") -> PatchLabConfig:
             "scope.max_deleted_lines",
         ),
     )
+
+    execution_data = _expect_table(data, "execution")
+    _reject_unknown_keys(execution_data, _EXECUTION_KEYS, "[execution]")
+    mode = _choice(
+        execution_data.get("mode", "static"),
+        "execution.mode",
+        {"auto", "static", "container", "native"},
+    )
+    container_runtime = _choice(
+        execution_data.get("container_runtime", "auto"),
+        "execution.container_runtime",
+        {"auto", "docker", "podman"},
+    )
+    container_image = execution_data.get("container_image", "")
+    if not isinstance(container_image, str):
+        raise ConfigError("execution.container_image must be a string")
+    container_image = container_image.strip()
+    if container_image and not _PINNED_IMAGE_RE.fullmatch(container_image):
+        raise ConfigError(
+            "execution.container_image must use an immutable @sha256 digest or image ID"
+        )
+    execution = ExecutionConfig(
+        mode=mode,
+        container_runtime=container_runtime,
+        container_image=container_image,
+        network=_boolean(execution_data.get("network", False), "execution.network"),
+        memory_mb=_positive_int(
+            execution_data.get("memory_mb", 1024), "execution.memory_mb"
+        ),
+        cpus=_positive_number(execution_data.get("cpus", 1.0), "execution.cpus"),
+        pids_limit=_positive_int(
+            execution_data.get("pids_limit", 128), "execution.pids_limit"
+        ),
+        tmpfs_mb=_positive_int(
+            execution_data.get("tmpfs_mb", 64), "execution.tmpfs_mb"
+        ),
+        allow_unsafe_native=_boolean(
+            execution_data.get("allow_unsafe_native", False),
+            "execution.allow_unsafe_native",
+        ),
+    )
+    if mode == "container" and not container_image:
+        raise ConfigError("execution.container_image is required in container mode")
+    if mode == "native" and not execution.allow_unsafe_native:
+        raise ConfigError(
+            "execution.allow_unsafe_native must be true when execution.mode is native"
+        )
 
     policy_data = _expect_table(data, "policy")
     _reject_unknown_keys(policy_data, _POLICY_KEYS, "[policy]")
@@ -283,7 +373,17 @@ def load_config_text(text: str, source: str = "<memory>") -> PatchLabConfig:
             )
         )
 
-    return PatchLabConfig(project_name=name.strip(), commands=tuple(commands), scope=scope, policy=policy)
+    return PatchLabConfig(
+        project_name=name.strip(),
+        commands=tuple(commands),
+        scope=scope,
+        policy=policy,
+        execution=execution,
+    )
+
+
+def is_pinned_container_image(value: str) -> bool:
+    return bool(_PINNED_IMAGE_RE.fullmatch(value))
 
 
 def _reject_unknown_keys(data: dict[str, Any], allowed: set[str], location: str) -> None:
@@ -337,7 +437,25 @@ def _environment_names(value: Any, field_name: str) -> tuple[str, ...]:
         raise ConfigError(f"{field_name} contains an invalid environment variable name: {invalid[0]!r}")
     if len(names) != len(set(names)):
         raise ConfigError(f"{field_name} must not contain duplicate names")
+    sensitive = [name for name in names if _SENSITIVE_ENV_NAME_RE.search(name)]
+    if sensitive:
+        raise ConfigError(
+            f"{field_name} must not expose credential-like variables: {sensitive[0]!r}"
+        )
     return names
+
+
+def _choice(value: Any, field_name: str, choices: set[str]) -> str:
+    if not isinstance(value, str) or value not in choices:
+        rendered = ", ".join(sorted(choices))
+        raise ConfigError(f"{field_name} must be one of: {rendered}")
+    return value
+
+
+def _positive_number(value: Any, field_name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
+        raise ConfigError(f"{field_name} must be a positive number")
+    return float(value)
 
 
 def _positive_int(value: Any, field_name: str) -> int:

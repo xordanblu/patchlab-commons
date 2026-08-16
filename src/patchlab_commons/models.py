@@ -65,6 +65,8 @@ class CommandResult:
     duration_seconds: float
     stdout: str
     stderr: str
+    executor: str = "native"
+    network_enabled: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         data = asdict(self)

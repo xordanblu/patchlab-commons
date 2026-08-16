@@ -17,6 +17,10 @@ SAFE_CONFIG = """
 [project]
 name = "demo-calculator"
 
+[execution]
+mode = "native"
+allow_unsafe_native = true
+
 [scope]
 allow = ["**"]
 deny = ["**/*.pem", "**/*.key", ".env"]

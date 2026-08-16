@@ -21,7 +21,7 @@ _MAX_MEMBER_BYTES = 32 * 1024 * 1024
 _MAX_TOTAL_BYTES = 96 * 1024 * 1024
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _GIT_SHA_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
-_IDENTITY_KEYS = {
+_IDENTITY_KEYS_V1 = {
     "project",
     "repository",
     "base_sha",
@@ -31,6 +31,14 @@ _IDENTITY_KEYS = {
     "tool_version",
     "config_source",
     "config_sha256",
+}
+_IDENTITY_KEYS_V2 = _IDENTITY_KEYS_V1 | {
+    "execution_mode",
+    "execution_boundary",
+    "container_runtime",
+    "container_image",
+    "network_enabled",
+    "unsafe_native_accepted",
 }
 
 
@@ -48,7 +56,8 @@ def sha256_file(path: Path) -> str:
 
 def create_passport_bundle(output_dir: Path, identity: dict[str, Any]) -> dict[str, str]:
     ensure_output_directory(output_dir)
-    if not _valid_identity(identity):
+    schema_version = _identity_schema_version(identity)
+    if schema_version is None:
         raise ValueError("passport identity is invalid")
     artifacts: dict[str, dict[str, Any]] = {}
     total_size = 0
@@ -65,7 +74,7 @@ def create_passport_bundle(output_dir: Path, identity: dict[str, Any]) -> dict[s
         raise ValueError("report files exceed the Patch Passport total size limit")
 
     passport = {
-        "schema_version": "1.0.0",
+        "schema_version": schema_version,
         "identity": identity,
         "artifacts": artifacts,
         "verification": {
@@ -122,10 +131,11 @@ def verify_passport_bundle(bundle_path: str | Path) -> tuple[bool, dict[str, Any
             passport = json.loads(passport_raw.decode("utf-8"))
             if not isinstance(passport, dict):
                 return False, {"error": "passport root must be an object"}
-            if passport.get("schema_version") != "1.0.0":
+            schema_version = passport.get("schema_version")
+            if schema_version not in {"1.0.0", "1.1.0"}:
                 return False, {"error": "unsupported passport schema version"}
             identity = passport.get("identity")
-            if not _valid_identity(identity):
+            if not _valid_identity(identity, schema_version):
                 return False, {"error": "passport identity is invalid"}
             verification = passport.get("verification")
             if not _valid_verification(verification):
@@ -180,8 +190,19 @@ def _valid_artifact_spec(value: Any) -> bool:
     )
 
 
-def _valid_identity(value: Any) -> bool:
-    if not isinstance(value, dict) or set(value) != _IDENTITY_KEYS:
+def _identity_schema_version(value: Any) -> str | None:
+    if not isinstance(value, dict):
+        return None
+    if set(value) == _IDENTITY_KEYS_V2 and _valid_identity(value, "1.1.0"):
+        return "1.1.0"
+    if set(value) == _IDENTITY_KEYS_V1 and _valid_identity(value, "1.0.0"):
+        return "1.0.0"
+    return None
+
+
+def _valid_identity(value: Any, schema_version: str) -> bool:
+    expected = _IDENTITY_KEYS_V2 if schema_version == "1.1.0" else _IDENTITY_KEYS_V1
+    if not isinstance(value, dict) or set(value) != expected:
         return False
     string_fields = (
         "project",
@@ -205,7 +226,25 @@ def _valid_identity(value: Any) -> bool:
     if value.get("config_source") not in {"base", "head", "working-tree"}:
         return False
     digest = value.get("config_sha256")
-    return isinstance(digest, str) and _SHA256_RE.fullmatch(digest) is not None
+    if not isinstance(digest, str) or _SHA256_RE.fullmatch(digest) is None:
+        return False
+    if schema_version == "1.0.0":
+        return True
+    if value.get("execution_mode") not in {"static", "native", "container"}:
+        return False
+    if value.get("execution_boundary") not in {
+        "static-no-execution",
+        "weak-native",
+        "isolated-container",
+    }:
+        return False
+    if not isinstance(value.get("container_runtime"), str):
+        return False
+    if not isinstance(value.get("container_image"), str):
+        return False
+    if not isinstance(value.get("network_enabled"), bool):
+        return False
+    return isinstance(value.get("unsafe_native_accepted"), bool)
 
 
 def _valid_verification(value: Any) -> bool:

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import os
+from pathlib import Path, PurePosixPath
+import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
 from typing import BinaryIO, Iterator
 from urllib.parse import urlsplit, urlunsplit
 
@@ -13,6 +14,9 @@ from .models import ChangedFile
 
 _MAX_GIT_OUTPUT_BYTES = 64 * 1024 * 1024
 _MAX_GIT_ERROR_BYTES = 1024 * 1024
+_MAX_SNAPSHOT_BYTES = 512 * 1024 * 1024
+_MAX_SNAPSHOT_MEMBER_BYTES = 128 * 1024 * 1024
+_MAX_SNAPSHOT_FILES = 100_000
 
 
 class GitError(RuntimeError):
@@ -26,6 +30,22 @@ class GitCommandResult:
     returncode: int
 
 
+@dataclass(frozen=True, slots=True)
+class _TreeEntry:
+    mode: str
+    object_id: str
+    size: int
+    path: str
+
+    @property
+    def symlink(self) -> bool:
+        return self.mode == "120000"
+
+    @property
+    def executable(self) -> bool:
+        return self.mode == "100755"
+
+
 class GitRepo:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path).resolve()
@@ -34,11 +54,16 @@ class GitRepo:
         self.path = Path(root).resolve()
 
     def _run(self, *args: str, check: bool = True) -> GitCommandResult:
-        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        with (
+            tempfile.TemporaryDirectory(prefix="patchlab-git-home-") as home_raw,
+            tempfile.TemporaryFile() as stdout_file,
+            tempfile.TemporaryFile() as stderr_file,
+        ):
             process = subprocess.run(
                 _git_command(*args),
                 cwd=self.path,
-                env=_git_environment(),
+                env=_git_environment(Path(home_raw)),
+                stdin=subprocess.DEVNULL,
                 stdout=stdout_file,
                 stderr=stderr_file,
                 check=False,
@@ -53,11 +78,16 @@ class GitRepo:
         return GitCommandResult(decoded_stdout, decoded_stderr, process.returncode)
 
     def _run_bytes(self, *args: str, check: bool = True) -> bytes:
-        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        with (
+            tempfile.TemporaryDirectory(prefix="patchlab-git-home-") as home_raw,
+            tempfile.TemporaryFile() as stdout_file,
+            tempfile.TemporaryFile() as stderr_file,
+        ):
             process = subprocess.run(
                 _git_command(*args),
                 cwd=self.path,
-                env=_git_environment(),
+                env=_git_environment(Path(home_raw)),
+                stdin=subprocess.DEVNULL,
                 stdout=stdout_file,
                 stderr=stderr_file,
                 check=False,
@@ -71,7 +101,7 @@ class GitRepo:
         return stdout
 
     def resolve(self, ref: str) -> str:
-        return self._run("rev-parse", "--verify", f"{ref}^{{commit}}").stdout.strip()
+        return self._run("rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}").stdout.strip()
 
     def is_clean(self) -> bool:
         return not self._run("status", "--porcelain=v1").stdout.strip()
@@ -143,19 +173,85 @@ class GitRepo:
         return {key: raw[index] if index < len(raw) else "" for index, key in enumerate(keys)}
 
     @contextlib.contextmanager
-    def worktree(self, sha: str, label: str) -> Iterator[Path]:
+    def snapshot(self, sha: str, label: str) -> Iterator[Path]:
+        """Materialize Git objects without hooks, filters, attributes, or .git."""
+
         parent = Path(tempfile.mkdtemp(prefix=f"patchlab-{label}-"))
         checkout = parent / "repo"
+        checkout.mkdir(mode=0o700)
         try:
-            self._run("worktree", "add", "--detach", str(checkout), sha)
+            entries = _parse_tree_entries(
+                self._run_bytes(
+                    "ls-tree",
+                    "-rz",
+                    "-l",
+                    "--full-tree",
+                    sha,
+                    "--",
+                )
+            )
+            if len(entries) > _MAX_SNAPSHOT_FILES:
+                raise GitError(
+                    f"Git tree exceeded the {_MAX_SNAPSHOT_FILES}-file snapshot limit"
+                )
+            total = sum(item.size for item in entries)
+            if total > _MAX_SNAPSHOT_BYTES:
+                raise GitError(
+                    f"Git tree exceeded the {_MAX_SNAPSHOT_BYTES}-byte snapshot limit"
+                )
+
+            ordinary = [item for item in entries if not item.symlink]
+            links = [item for item in entries if item.symlink]
+            for entry in ordinary:
+                raw = self._read_blob(entry.object_id, entry.size)
+                _write_snapshot_file(checkout, entry.path, raw, entry.executable)
+            for entry in links:
+                raw = self._read_blob(entry.object_id, entry.size)
+                _write_snapshot_link(checkout, entry.path, raw)
             yield checkout
         finally:
-            if checkout.exists():
-                self._run("worktree", "remove", "--force", str(checkout), check=False)
-            with contextlib.suppress(OSError):
-                checkout.rmdir()
-            with contextlib.suppress(OSError):
-                parent.rmdir()
+            shutil.rmtree(parent, ignore_errors=True)
+
+    # Backward-compatible internal alias. New code should use snapshot().
+    worktree = snapshot
+
+    def _read_blob(self, object_id: str, expected_size: int) -> bytes:
+        if expected_size < 0 or expected_size > _MAX_SNAPSHOT_MEMBER_BYTES:
+            raise GitError(
+                f"Git blob exceeded the {_MAX_SNAPSHOT_MEMBER_BYTES}-byte member limit"
+            )
+        with (
+            tempfile.TemporaryDirectory(prefix="patchlab-git-home-") as home_raw,
+            tempfile.TemporaryFile() as stdout_file,
+            tempfile.TemporaryFile() as stderr_file,
+        ):
+            process = subprocess.run(
+                _git_command("cat-file", "blob", object_id),
+                cwd=self.path,
+                env=_git_environment(Path(home_raw)),
+                stdin=subprocess.DEVNULL,
+                stdout=stdout_file,
+                stderr=stderr_file,
+                check=False,
+            )
+            raw = _read_limited(
+                stdout_file,
+                _MAX_SNAPSHOT_MEMBER_BYTES,
+                "Git blob",
+            )
+            stderr = _read_limited(
+                stderr_file,
+                _MAX_GIT_ERROR_BYTES,
+                "Git standard error",
+            )
+        if process.returncode != 0:
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            raise GitError(f"git cat-file failed: {detail}")
+        if len(raw) != expected_size:
+            raise GitError(
+                f"Git blob size mismatch for {object_id}: expected {expected_size}, got {len(raw)}"
+            )
+        return raw
 
     def repository_display(self) -> str:
         remote = self._run("remote", "get-url", "origin", check=False).stdout.strip()
@@ -183,29 +279,186 @@ def _public_repository_identifier(remote: str) -> str:
     return path.name or "repository"
 
 
+def _git_executable() -> str:
+    path = os.environ.get("PATH", os.defpath)
+    executable = shutil.which("git", path=path)
+    if not executable:
+        raise GitError("git executable was not found on PATH")
+    return os.path.abspath(executable)
+
+
 def _git_command(*args: str) -> list[str]:
     return [
-        "git",
+        _git_executable(),
         "-c",
         f"core.hooksPath={os.devnull}",
         "-c",
         "core.fsmonitor=false",
+        "-c",
+        "diff.external=",
+        "-c",
+        "interactive.diffFilter=",
+        "-c",
+        "protocol.file.allow=never",
         *args,
     ]
 
 
-def _git_environment() -> dict[str, str]:
-    environment = os.environ.copy()
+def _git_environment(home: Path | None = None) -> dict[str, str]:
+    """Build a minimal non-interactive environment for local Git operations."""
+
+    environment: dict[str, str] = {}
+    for key in (
+        "PATH",
+        "SYSTEMROOT",
+        "WINDIR",
+        "PATHEXT",
+        "COMSPEC",
+        "LANG",
+        "LC_ALL",
+        "TMPDIR",
+        "TEMP",
+        "TMP",
+    ):
+        value = os.environ.get(key)
+        if value:
+            environment[key] = value
+
+    empty_home = home or Path(tempfile.mkdtemp(prefix="patchlab-git-home-"))
+    empty_home.mkdir(mode=0o700, parents=True, exist_ok=True)
     environment.update(
         {
+            "HOME": os.fspath(empty_home),
+            "XDG_CONFIG_HOME": os.fspath(empty_home / ".config"),
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": os.devnull,
+            "GIT_CONFIG_COUNT": "0",
             "GIT_TERMINAL_PROMPT": "0",
+            "GIT_PROTOCOL_FROM_USER": "0",
+            "GIT_OPTIONAL_LOCKS": "0",
             "GIT_PAGER": "cat",
             "PAGER": "cat",
         }
     )
     return environment
+
+
+def _parse_tree_entries(raw: bytes) -> list[_TreeEntry]:
+    entries: list[_TreeEntry] = []
+    seen: set[str] = set()
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        try:
+            metadata, path_raw = record.split(b"\t", 1)
+            mode_raw, kind_raw, object_raw, size_raw = metadata.split(b" ", 3)
+        except ValueError as exc:
+            raise GitError("malformed NUL-delimited output from git ls-tree") from exc
+        try:
+            mode = mode_raw.decode("ascii")
+            kind = kind_raw.decode("ascii")
+            object_id = object_raw.decode("ascii")
+            path = path_raw.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise GitError("snapshot paths and object metadata must be valid UTF-8/ASCII") from exc
+        if kind != "blob" or mode not in {"100644", "100755", "120000"}:
+            raise GitError(f"unsupported Git tree entry: mode={mode}, type={kind}, path={path}")
+        if len(object_id) not in {40, 64} or any(ch not in "0123456789abcdef" for ch in object_id):
+            raise GitError(f"invalid Git object id for snapshot entry: {path}")
+        try:
+            size = int(size_raw)
+        except ValueError as exc:
+            raise GitError(f"invalid Git blob size for snapshot entry: {path}") from exc
+        _validate_snapshot_path(path)
+        if path in seen:
+            raise GitError(f"duplicate Git tree path: {path}")
+        seen.add(path)
+        entries.append(_TreeEntry(mode, object_id, size, path))
+    return entries
+
+
+def _validate_snapshot_path(name: str) -> PurePosixPath:
+    if not name or "\x00" in name:
+        raise GitError("snapshot contains an empty or NUL-containing path")
+    if "\\" in name or ":" in name:
+        raise GitError(f"snapshot path is not portable across supported hosts: {name}")
+    relative = PurePosixPath(name)
+    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+        raise GitError(f"snapshot path escapes the snapshot root: {name}")
+    if any(part.casefold() == ".git" for part in relative.parts):
+        raise GitError(f"snapshot path uses the reserved .git name: {name}")
+    return relative
+
+
+def _validate_link_target(path: PurePosixPath, target: str) -> None:
+    if not target or "\x00" in target:
+        raise GitError(f"snapshot symbolic link has an invalid target: {path}")
+    if "\\" in target or ":" in target:
+        raise GitError(f"snapshot symbolic link is not portable: {path}")
+    link = PurePosixPath(target)
+    if link.is_absolute() or _lexical_link_escapes(path.parent, link):
+        raise GitError(f"snapshot symbolic link escapes the snapshot root: {path}")
+
+
+def _write_snapshot_file(root: Path, name: str, raw: bytes, executable: bool) -> None:
+    relative = _validate_snapshot_path(name)
+    target = root.joinpath(*relative.parts)
+    _ensure_parent_directories(root, target.parent)
+    if target.exists() or target.is_symlink():
+        raise GitError(f"snapshot path collides with an existing entry: {name}")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(target, flags, 0o755 if executable else 0o644)
+    try:
+        with os.fdopen(descriptor, "wb", closefd=False) as destination:
+            destination.write(raw)
+            destination.flush()
+    finally:
+        os.close(descriptor)
+
+
+def _write_snapshot_link(root: Path, name: str, raw: bytes) -> None:
+    relative = _validate_snapshot_path(name)
+    try:
+        link_target = raw.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise GitError(f"snapshot symbolic link target is not UTF-8: {name}") from exc
+    _validate_link_target(relative, link_target)
+    target = root.joinpath(*relative.parts)
+    _ensure_parent_directories(root, target.parent)
+    if target.exists() or target.is_symlink():
+        raise GitError(f"snapshot path collides with an existing entry: {name}")
+    try:
+        target.symlink_to(link_target)
+    except OSError as exc:
+        raise GitError(f"could not materialize symbolic link {name}: {exc}") from exc
+
+
+def _lexical_link_escapes(parent: PurePosixPath, link: PurePosixPath) -> bool:
+    depth = 0
+    for part in (*parent.parts, *link.parts):
+        if part in {"", "."}:
+            continue
+        if part == "..":
+            depth -= 1
+            if depth < 0:
+                return True
+        else:
+            depth += 1
+    return False
+
+
+def _ensure_parent_directories(root: Path, parent: Path) -> None:
+    relative = parent.relative_to(root)
+    current = root
+    for part in relative.parts:
+        current = current / part
+        if current.is_symlink():
+            raise GitError(f"archive parent path is a symbolic link: {relative}")
+        current.mkdir(mode=0o755, exist_ok=True)
+        if not current.is_dir():
+            raise GitError(f"archive parent path is not a directory: {relative}")
 
 
 def _read_limited(handle: BinaryIO, limit: int, label: str) -> bytes:
@@ -248,4 +501,3 @@ def _parse_numstat_z(raw: bytes) -> dict[str, tuple[int | None, int | None, bool
         deleted = None if binary else int(deleted_raw)
         stats[path] = (added, deleted, binary)
     return stats
-

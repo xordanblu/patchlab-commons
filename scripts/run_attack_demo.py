@@ -16,6 +16,10 @@ CONFIG = """
 [project]
 name = "patchlab-blocked-workflow-demo"
 
+[execution]
+mode = "native"
+allow_unsafe_native = true
+
 [scope]
 allow = ["**"]
 deny = ["**/*.pem", "**/*.key", ".env"]

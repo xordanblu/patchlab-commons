@@ -81,6 +81,34 @@ def build_parser() -> argparse.ArgumentParser:
     verify.add_argument("--base", required=True)
     verify.add_argument("--head", required=True)
     verify.add_argument("--output", type=Path, default=Path(".patchlab/out"))
+    verify.add_argument(
+        "--execution-mode",
+        choices=("auto", "static", "container", "native"),
+        help="override the trusted execution mode",
+    )
+    verify.add_argument(
+        "--container-runtime",
+        choices=("auto", "docker", "podman"),
+        help="override the container runtime",
+    )
+    verify.add_argument(
+        "--container-image",
+        help="digest-pinned image, for example name@sha256:<64 hex characters>",
+    )
+    verify.add_argument(
+        "--network",
+        dest="network",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="allow or deny network access inside the command container",
+    )
+    verify.add_argument(
+        "--allow-unsafe-native",
+        dest="allow_unsafe_native",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="explicitly accept the weak native command boundary",
+    )
     review = verify.add_mutually_exclusive_group()
     review.add_argument("--fail-on-review", dest="fail_on_review", action="store_true")
     review.add_argument("--allow-review", dest="fail_on_review", action="store_false")
@@ -157,9 +185,19 @@ def _verify(args: argparse.Namespace) -> int:
             output_dir=args.output,
             fail_on_review=args.fail_on_review,
             config_source=args.config_source,
+            execution_mode=args.execution_mode,
+            container_runtime=args.container_runtime,
+            container_image=args.container_image,
+            network=args.network,
+            allow_unsafe_native=args.allow_unsafe_native,
         )
     )
     report = result.report
+    if report.metadata.get("execution_boundary") == "weak-native":
+        print(
+            "WARNING: project code ran with the weak native boundary; it was not OS-isolated.",
+            file=sys.stderr,
+        )
     print(f"PatchLab outcome: {report.outcome.value}")
     print(f"Changed files: {report.summary['changed_files']}")
     print(f"Commands: {report.summary['commands_passed']}/{report.summary['commands']} passed")

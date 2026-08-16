@@ -73,6 +73,8 @@ def report_schema() -> dict[str, Any]:
                     "duration_seconds",
                     "stdout",
                     "stderr",
+                    "executor",
+                    "network_enabled",
                 ],
                 "properties": {
                     "name": {"type": "string", "minLength": 1},
@@ -92,6 +94,8 @@ def report_schema() -> dict[str, Any]:
                     "duration_seconds": {"type": "number", "minimum": 0},
                     "stdout": {"type": "string"},
                     "stderr": {"type": "string"},
+                    "executor": {"type": "string", "minLength": 1},
+                    "network_enabled": {"type": "boolean"},
                 },
                 "additionalProperties": False,
             },
@@ -160,6 +164,12 @@ def report_schema() -> dict[str, Any]:
                     "config_source",
                     "config_location",
                     "config_sha256",
+                    "execution_mode",
+                    "execution_boundary",
+                    "container_runtime",
+                    "container_image",
+                    "network_enabled",
+                    "unsafe_native_accepted",
                 ],
                 "properties": {
                     "platform": {"type": "string"},
@@ -172,6 +182,18 @@ def report_schema() -> dict[str, Any]:
                     "config_source": {"enum": ["base", "head", "working-tree"]},
                     "config_location": {"type": "string", "minLength": 1},
                     "config_sha256": {"$ref": "#/$defs/sha256"},
+                    "execution_mode": {"enum": ["static", "native", "container"]},
+                    "execution_boundary": {
+                        "enum": [
+                            "static-no-execution",
+                            "weak-native",
+                            "isolated-container",
+                        ]
+                    },
+                    "container_runtime": {"type": "string"},
+                    "container_image": {"type": "string"},
+                    "network_enabled": {"type": "boolean"},
+                    "unsafe_native_accepted": {"type": "boolean"},
                 },
                 "additionalProperties": False,
             },
@@ -204,7 +226,7 @@ def report_schema() -> dict[str, Any]:
             "metadata",
         ],
         "properties": {
-            "schema_version": {"type": "string", "const": "1.0.0"},
+            "schema_version": {"type": "string", "const": "1.1.0"},
             "tool_version": {"type": "string", "minLength": 1},
             "project_name": {"type": "string", "minLength": 1},
             "generated_at": {"type": "string", "format": "date-time"},
@@ -263,6 +285,12 @@ def passport_schema() -> dict[str, Any]:
                     "tool_version",
                     "config_source",
                     "config_sha256",
+                    "execution_mode",
+                    "execution_boundary",
+                    "container_runtime",
+                    "container_image",
+                    "network_enabled",
+                    "unsafe_native_accepted",
                 ],
                 "properties": {
                     "project": {"type": "string", "minLength": 1},
@@ -276,6 +304,18 @@ def passport_schema() -> dict[str, Any]:
                         "enum": ["base", "head", "working-tree"]
                     },
                     "config_sha256": {"$ref": "#/$defs/sha256"},
+                    "execution_mode": {"enum": ["static", "native", "container"]},
+                    "execution_boundary": {
+                        "enum": [
+                            "static-no-execution",
+                            "weak-native",
+                            "isolated-container",
+                        ]
+                    },
+                    "container_runtime": {"type": "string"},
+                    "container_image": {"type": "string"},
+                    "network_enabled": {"type": "boolean"},
+                    "unsafe_native_accepted": {"type": "boolean"},
                 },
                 "additionalProperties": False,
             },
@@ -292,7 +332,7 @@ def passport_schema() -> dict[str, Any]:
         "type": "object",
         "required": ["schema_version", "identity", "artifacts", "verification"],
         "properties": {
-            "schema_version": {"type": "string", "const": "1.0.0"},
+            "schema_version": {"type": "string", "const": "1.1.0"},
             "identity": {"$ref": "#/$defs/identity"},
             "artifacts": {
                 "type": "object",

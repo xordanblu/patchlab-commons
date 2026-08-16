@@ -1,0 +1,10 @@
+# Direct development requirements.
+# Exact transitive resolution is captured by each CI run and its artifact metadata.
+bandit==1.9.4
+build==1.5.0
+coverage==7.15.2
+jsonschema==4.26.0
+mypy==2.3.0
+pip-audit==2.10.1
+ruff==0.16.0
+twine==6.2.0

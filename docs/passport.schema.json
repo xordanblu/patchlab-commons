@@ -38,12 +38,35 @@
             "working-tree"
           ]
         },
+        "container_image": {
+          "type": "string"
+        },
+        "container_runtime": {
+          "type": "string"
+        },
+        "execution_boundary": {
+          "enum": [
+            "static-no-execution",
+            "weak-native",
+            "isolated-container"
+          ]
+        },
+        "execution_mode": {
+          "enum": [
+            "static",
+            "native",
+            "container"
+          ]
+        },
         "generated_at": {
           "format": "date-time",
           "type": "string"
         },
         "head_sha": {
           "$ref": "#/$defs/gitSha"
+        },
+        "network_enabled": {
+          "type": "boolean"
         },
         "outcome": {
           "enum": [
@@ -63,6 +86,9 @@
         "tool_version": {
           "minLength": 1,
           "type": "string"
+        },
+        "unsafe_native_accepted": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -74,7 +100,13 @@
         "generated_at",
         "tool_version",
         "config_source",
-        "config_sha256"
+        "config_sha256",
+        "execution_mode",
+        "execution_boundary",
+        "container_runtime",
+        "container_image",
+        "network_enabled",
+        "unsafe_native_accepted"
       ],
       "type": "object"
     },
@@ -112,7 +144,7 @@
       "$ref": "#/$defs/identity"
     },
     "schema_version": {
-      "const": "1.0.0",
+      "const": "1.1.0",
       "type": "string"
     },
     "verification": {

@@ -1,5 +1,5 @@
 name: PatchLab Passport
-description: Create an evidence-first Patch Passport for a software change.
+description: Create an evidence-first Patch Passport without trusting the caller workspace during bootstrap.
 author: PatchLab Commons
 
 branding:
@@ -14,7 +14,7 @@ inputs:
     description: Candidate Git ref or commit SHA.
     required: true
   repository:
-    description: Repository directory inside the checked-out workspace.
+    description: Repository directory inside GITHUB_WORKSPACE.
     required: false
     default: .
   config:
@@ -33,6 +33,22 @@ inputs:
     description: Fail when a policy requires human review.
     required: false
     default: "true"
+  execution-mode:
+    description: static, auto, or container. Static never executes project code.
+    required: false
+    default: static
+  container-runtime:
+    description: auto, docker, or podman.
+    required: false
+    default: auto
+  container-image:
+    description: Digest-pinned image used for isolated command execution.
+    required: false
+    default: ""
+  network:
+    description: Allow network access inside the isolated container.
+    required: false
+    default: "false"
 
 outputs:
   outcome:
@@ -66,113 +82,24 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Install PatchLab Commons
-      shell: bash
-      run: python -m pip install --no-deps --disable-pip-version-check "${{ github.action_path }}"
-
-    - name: Create Patch Passport
+    - name: Create and verify Patch Passport
       id: verify
       shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         PATCHLAB_BASE: ${{ inputs.base }}
         PATCHLAB_HEAD: ${{ inputs.head }}
         PATCHLAB_REPOSITORY: ${{ inputs.repository }}
         PATCHLAB_CONFIG: ${{ inputs.config }}
         PATCHLAB_OUTPUT: ${{ inputs.output }}
-        PATCHLAB_CONFIG_SOURCE: ${{ inputs['config-source'] }}
-        PATCHLAB_FAIL_ON_REVIEW: ${{ inputs['fail-on-review'] }}
-      run: |
-        case "$PATCHLAB_FAIL_ON_REVIEW" in
-          true|false) ;;
-          *)
-            echo "fail-on-review must be true or false" >&2
-            exit 64
-            ;;
-        esac
-
-        args=(
-          verify
-          --repo "$PATCHLAB_REPOSITORY"
-          --base "$PATCHLAB_BASE"
-          --head "$PATCHLAB_HEAD"
-          --config "$PATCHLAB_CONFIG"
-          --config-source "$PATCHLAB_CONFIG_SOURCE"
-          --output "$PATCHLAB_OUTPUT"
-        )
-        if [[ "$PATCHLAB_FAIL_ON_REVIEW" == "true" ]]; then
-          args+=(--fail-on-review)
-        else
-          args+=(--allow-review)
-        fi
-
-        set +e
-        python -m patchlab_commons "${args[@]}"
-        status=$?
-        set -e
-
-        python - "$PATCHLAB_REPOSITORY" "$PATCHLAB_OUTPUT" "$GITHUB_OUTPUT" "$status" <<'PY'
-        import json
-        import os
-        from pathlib import Path
-        import re
-        import sys
-        import uuid
-
-        repository = Path(sys.argv[1]).resolve()
-        requested = Path(sys.argv[2])
-        if requested.is_absolute():
-            output = requested
-        else:
-            candidate = (repository / requested).resolve()
-            try:
-                candidate.relative_to(repository)
-            except ValueError:
-                candidate = repository / ".patchlab" / "invalid-output"
-            output = candidate
-        github_output = Path(sys.argv[3])
-        exit_code = sys.argv[4]
-
-        report = output / "report.json"
-        markdown = output / "report.md"
-        sarif = output / "results.sarif"
-        passport = output / "passport.json"
-        bundle = output / "patchlab-passport.tar.gz"
-        sidecar = output / "patchlab-passport.tar.gz.sha256"
-
-        outcome = "fail"
-        if report.is_file():
-            try:
-                candidate_outcome = json.loads(report.read_text(encoding="utf-8")).get("outcome")
-            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
-                candidate_outcome = None
-            if candidate_outcome in {"pass", "needs_review", "fail"}:
-                outcome = candidate_outcome
-
-        digest = ""
-        if sidecar.is_file():
-            first = sidecar.read_text(encoding="utf-8").split()
-            if first and re.fullmatch(r"[0-9a-f]{64}", first[0]):
-                digest = first[0]
-
-        def emit(name: str, value: str) -> None:
-            delimiter = f"patchlab_{uuid.uuid4().hex}"
-            with github_output.open("a", encoding="utf-8") as handle:
-                handle.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
-
-        emit("outcome", outcome)
-        emit("report", str(report))
-        emit("markdown", str(markdown))
-        emit("sarif", str(sarif))
-        emit("passport", str(passport))
-        emit("bundle", str(bundle))
-        emit("bundle_sha256", digest)
-        emit("sidecar", str(sidecar))
-        emit("exit_code", exit_code)
-
-        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-        if summary_path and markdown.is_file():
-            with Path(summary_path).open("a", encoding="utf-8") as handle:
-                handle.write(markdown.read_text(encoding="utf-8"))
-                handle.write("\n")
-        PY
-        exit "$status"
+        PATCHLAB_CONFIG_SOURCE: ${{ inputs.config-source }}
+        PATCHLAB_FAIL_ON_REVIEW: ${{ inputs.fail-on-review }}
+        PATCHLAB_EXECUTION_MODE: ${{ inputs.execution-mode }}
+        PATCHLAB_CONTAINER_RUNTIME: ${{ inputs.container-runtime }}
+        PATCHLAB_CONTAINER_IMAGE: ${{ inputs.container-image }}
+        PATCHLAB_NETWORK: ${{ inputs.network }}
+        PYTHONPATH: ""
+        PYTHONHOME: ""
+        PYTHONSTARTUP: ""
+        PYTHONUSERBASE: ""
+      run: python -I -S scripts/action_entry.py

@@ -33,7 +33,7 @@ class SchemaContractTests(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.assertFalse(schema["$defs"]["finding"]["additionalProperties"])
         self.assertFalse(schema["$defs"]["commandResult"]["additionalProperties"])
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.0.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.0")
 
     def test_passport_schema_has_strict_manifest_objects(self) -> None:
         schema = passport_schema()
