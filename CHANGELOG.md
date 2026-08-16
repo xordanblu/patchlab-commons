@@ -33,5 +33,9 @@ All notable changes are documented here.
 - Strict bundle member, type, digest, and size validation.
 - Markdown injection defenses for untrusted file names.
 - Credential-safe repository identifiers.
+- Git hook, file-system monitor, external diff, and text-conversion suppression.
+- Public JSON Schemas for reports and passport manifests.
+- Bounded Git output and metadata-to-diff integrity checks.
+- Full composite-action outputs and exact commit pins for official actions.
 - Valid and blocked end-to-end demonstrations.
 - CI across Python 3.11–3.13 on Linux, macOS, and Windows.
