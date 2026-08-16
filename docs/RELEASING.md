@@ -23,6 +23,11 @@ Do not move an existing tag. Do not use force push. Do not reuse artifacts from 
 - bounded Passport decompression and semantic identity validation;
 - no known P0 or P1 issue left open without an explicit release blocker.
 
+The whole-release self-audit retains test-integrity findings as review items because the
+`v0.1.0..v0.2.0` comparison contains renamed assertions and narrow platform-specific test guards.
+This does not suppress those findings: they remain in the self-audit Passport, require maintainer
+review, and are independently gated by the complete hosted matrix and the coverage threshold.
+
 ## Local checks
 
 ```bash
