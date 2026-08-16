@@ -65,6 +65,11 @@ class HostedWorkflowContractTests(unittest.TestCase):
         self.assertIn("name: Publish GitHub release", text)
         self.assertNotIn("--prerelease", text)
 
+    def test_release_installs_only_the_python_source_distribution(self) -> None:
+        text = self._read(".github/workflows/release.yml")
+        self.assertIn("release/patchlab_commons-*.tar.gz", text)
+        self.assertNotIn("--no-build-isolation release/*.tar.gz", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -135,7 +135,7 @@ jobs:
           (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/wheel-env/bin/patchlab" --version)
           python -I -m venv "$RUNNER_TEMP/sdist-env"
           "$RUNNER_TEMP/sdist-env/bin/python" -I -m pip install setuptools==83.0.0
-          "$RUNNER_TEMP/sdist-env/bin/python" -I -m pip install --no-deps --no-build-isolation release/*.tar.gz
+          "$RUNNER_TEMP/sdist-env/bin/python" -I -m pip install --no-deps --no-build-isolation release/patchlab_commons-*.tar.gz
           (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/sdist-env/bin/patchlab" --version)
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
