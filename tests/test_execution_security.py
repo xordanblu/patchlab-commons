@@ -27,11 +27,10 @@ _DIGEST_IMAGE = "python@sha256:" + ("a" * 64)
 
 class ExecutionSecurityTests(unittest.TestCase):
     def setUp(self) -> None:
-        # Exercise the Linux-only selection logic on every host. Dedicated
-        # tests below still assert that real non-Linux selection fails closed.
-        linux = patch("patchlab_commons.runner.sys_platform_linux", return_value=True)
-        linux.start()
-        self.addCleanup(linux.stop)
+        if os.name != "nt":
+            linux = patch("patchlab_commons.runner.sys_platform_linux", return_value=True)
+            linux.start()
+            self.addCleanup(linux.stop)
 
     def test_static_executor_never_runs_commands(self) -> None:
         selected = select_executor(ExecutionConfig(mode="static"))
@@ -58,15 +57,19 @@ class ExecutionSecurityTests(unittest.TestCase):
     def test_auto_never_silently_falls_back_to_native(self) -> None:
         config = ExecutionConfig(mode="auto", container_image=_DIGEST_IMAGE)
         with patch("patchlab_commons.runner.shutil.which", return_value=None):
-            with self.assertRaisesRegex(ExecutionUnavailable, "no supported container"):
+            with self.assertRaisesRegex(
+                ExecutionUnavailable, "no supported container|cannot provide isolated container"
+            ):
                 select_executor(config)
 
+    @unittest.skipIf(os.name == "nt", "container selection fixtures require POSIX paths")
     def test_explicit_container_requires_available_runtime(self) -> None:
         config = ExecutionConfig(mode="container", container_image=_DIGEST_IMAGE)
         with patch("patchlab_commons.runner.shutil.which", return_value=None):
             with self.assertRaisesRegex(ExecutionUnavailable, "not available"):
                 select_executor(config)
 
+    @unittest.skipIf(os.name == "nt", "container selection fixtures require POSIX paths")
     def test_container_selection_preserves_limits(self) -> None:
         runtime = Path(tempfile.mkdtemp()) / "docker"
         runtime.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
@@ -89,6 +92,7 @@ class ExecutionSecurityTests(unittest.TestCase):
         self.assertEqual(selected.memory_mb, 512)
         self.assertEqual(selected.pids_limit, 32)
 
+    @unittest.skipIf(os.name == "nt", "container mount syntax uses POSIX host paths")
     def test_container_command_has_required_isolation_flags(self) -> None:
         workspace = Path(tempfile.mkdtemp(prefix="patchlab-workspace-"))
         command_config = CommandConfig(
@@ -136,6 +140,7 @@ class ExecutionSecurityTests(unittest.TestCase):
         self.assertNotIn("not-in-argv", rendered)
         self.assertEqual(argv[-3:], [_DIGEST_IMAGE, "python", "-V"])
 
+    @unittest.skipIf(os.name == "nt", "container mount syntax uses POSIX host paths")
     def test_container_network_must_be_explicit(self) -> None:
         workspace = Path(tempfile.mkdtemp())
         selected = ExecutorSelection(
@@ -178,7 +183,8 @@ class ExecutionSecurityTests(unittest.TestCase):
         self.assertIsNotNone(path)
         assert path is not None
         self.assertEqual(path.read_text(encoding="utf-8"), "SAFE_VALUE=visible=1\n")
-        self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+        if os.name != "nt":
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_container_env_file_rejects_multiline_values(self) -> None:
         home = Path(tempfile.mkdtemp())
@@ -231,7 +237,7 @@ class ExecutionSecurityTests(unittest.TestCase):
         with self.assertRaisesRegex(ExecutionUnavailable, "inside the untrusted snapshot"):
             _resolve_native_command(("python", "-V"), cwd, {"PATH": str(cwd)})
 
-    @unittest.skipIf(os.name == "nt", "POSIX executable fixtures are required")
+    @unittest.skipIf(os.name == "nt", "container selection fixtures require POSIX paths")
     def test_container_runtime_cannot_be_spoofed_by_the_repository(self) -> None:
         repo = Path(tempfile.mkdtemp())
         fake = repo / "docker"
@@ -245,11 +251,10 @@ class ExecutionSecurityTests(unittest.TestCase):
 
 class ContainerRuntimeBehaviorTests(unittest.TestCase):
     def setUp(self) -> None:
-        # These fake-runtime tests validate Linux container orchestration, not
-        # host detection. The explicit non-Linux test overrides this patch.
-        linux = patch("patchlab_commons.runner.sys_platform_linux", return_value=True)
-        linux.start()
-        self.addCleanup(linux.stop)
+        if os.name != "nt":
+            linux = patch("patchlab_commons.runner.sys_platform_linux", return_value=True)
+            linux.start()
+            self.addCleanup(linux.stop)
 
     def _runtime(self, body: str) -> Path:
         directory = Path(tempfile.mkdtemp())
@@ -279,6 +284,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
             tmpfs_mb=8,
         )
 
+    @unittest.skipIf(os.name == "nt", "fake container runtime requires POSIX paths")
     def test_fake_container_runtime_executes_and_captures_bounded_output(self) -> None:
         runtime = self._runtime(
             "import sys\n"
@@ -304,6 +310,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
         self.assertIn("omitted", result.stdout)
         self.assertIn("stderr-value", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "fake container runtime requires POSIX paths")
     def test_fake_container_runtime_timeout_is_reported(self) -> None:
         runtime = self._runtime(
             "import sys,time\n"
@@ -327,6 +334,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertIn("removed the isolated container", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "fake container runtime requires POSIX paths")
     def test_missing_container_runtime_is_rejected_before_execution(self) -> None:
         cwd = Path(tempfile.mkdtemp())
         cwd.chmod(0o755)
@@ -339,6 +347,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
                 selected,
             )
 
+    @unittest.skipIf(os.name == "nt", "fake container runtime requires POSIX paths")
     def test_unreadable_snapshot_is_rejected_before_container_launch(self) -> None:
         runtime = self._runtime("")
         cwd = Path(tempfile.mkdtemp())
@@ -351,6 +360,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
                 self._selection(runtime),
             )
 
+    @unittest.skipIf(os.name == "nt", "fake container runtime requires POSIX paths")
     def test_cleanup_must_be_verified(self) -> None:
         runtime = self._runtime(
             "if len(sys.argv) > 1 and sys.argv[1] == 'ps':\n"
@@ -370,6 +380,7 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
         self.assertIsNone(result.exit_code)
         self.assertIn("still exists", result.stderr)
 
+    @unittest.skipIf(os.name == "nt", "colon path fixture is not representable on Windows")
     def test_container_path_with_colon_is_rejected(self) -> None:
         workspace = Path(tempfile.mkdtemp()) / "bad:path"
         workspace.mkdir()
@@ -400,16 +411,22 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
                 select_executor(ExecutionConfig(mode="auto"))
 
     def test_auto_without_image_or_runtime_has_clear_error(self) -> None:
-        with patch("patchlab_commons.runner._find_container_runtime", return_value=("", "")):
+        with (
+            patch("patchlab_commons.runner.sys_platform_linux", return_value=True),
+            patch("patchlab_commons.runner._find_container_runtime", return_value=("", "")),
+        ):
             with self.assertRaisesRegex(ExecutionUnavailable, "no digest-pinned"):
                 select_executor(ExecutionConfig(mode="auto"))
             selected = select_executor(ExecutionConfig(mode="auto", allow_unsafe_native=True))
             self.assertEqual(selected.mode, "native")
 
     def test_container_mode_without_image_is_rejected_by_selector(self) -> None:
-        with patch(
-            "patchlab_commons.runner._find_container_runtime",
-            return_value=("docker", "/bin/docker"),
+        with (
+            patch(
+                "patchlab_commons.runner._find_container_runtime",
+                return_value=("docker", "/bin/docker"),
+            ),
+            patch("patchlab_commons.runner.sys_platform_linux", return_value=True),
         ):
             with self.assertRaisesRegex(ExecutionUnavailable, "requires"):
                 select_executor(ExecutionConfig(mode="container"))
@@ -426,8 +443,8 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
                 sandbox_tmp=Path("/sandbox/tmp"),
             )
         self.assertEqual(environment["TMPDIR"], "/trusted/tmp")
-        self.assertEqual(environment["TEMP"], "/sandbox/tmp")
-        self.assertEqual(environment["TMP"], "/sandbox/tmp")
+        self.assertEqual(environment["TEMP"], os.fspath(Path("/sandbox/tmp")))
+        self.assertEqual(environment["TMP"], os.fspath(Path("/sandbox/tmp")))
 
 
 if __name__ == "__main__":

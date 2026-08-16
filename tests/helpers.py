@@ -23,6 +23,7 @@ def init_repo(repo: Path) -> None:
     git(repo, "init", "-b", "main")
     git(repo, "config", "user.name", "PatchLab Test")
     git(repo, "config", "user.email", "patchlab@example.invalid")
+    git(repo, "config", "core.autocrlf", "false")
 
 
 def commit_all(repo: Path, message: str) -> str:

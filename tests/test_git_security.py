@@ -90,7 +90,7 @@ class GitSecurityTests(unittest.TestCase):
         external_sha = commit_all(external, "external")
         init_repo(victim)
         alternates = victim / ".git" / "objects" / "info" / "alternates"
-        alternates.write_text(str(external / ".git" / "objects") + "\n", encoding="utf-8")
+        alternates.write_bytes((external / ".git" / "objects").as_posix().encode() + b"\n")
         run_git(victim, "update-ref", "refs/heads/main", external_sha)
 
         with self.assertRaisesRegex(GitError, "alternate object databases"):
@@ -169,6 +169,7 @@ class GitSecurityTests(unittest.TestCase):
             with self.assertRaisesRegex(GitError, "declared untrusted root"):
                 _git_executable(workspace)
 
+    @unittest.skipIf(os.name == "nt", "POSIX fake Git executable is required")
     def test_git_commands_have_a_hard_timeout(self) -> None:
         root = Path(tempfile.mkdtemp())
         tools = Path(tempfile.mkdtemp())
@@ -176,7 +177,7 @@ class GitSecurityTests(unittest.TestCase):
         fake.write_text("#!/bin/sh\nsleep 5\n", encoding="utf-8")
         fake.chmod(0o755)
         with (
-            patch.dict(os.environ, {"PATH": f"{tools}:{os.defpath}"}, clear=False),
+            patch.dict(os.environ, {"PATH": f"{tools}{os.pathsep}{os.defpath}"}, clear=False),
             patch("patchlab_commons.gitutils._GIT_COMMAND_TIMEOUT_SECONDS", 0.1),
         ):
             with self.assertRaisesRegex(GitError, "safety limit"):

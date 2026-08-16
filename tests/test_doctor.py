@@ -18,7 +18,7 @@ class DoctorTests(unittest.TestCase):
         self.assertTrue(checks["python"].ok)
         self.assertTrue(checks["git"].ok)
         self.assertTrue(checks["repository"].ok)
-        self.assertTrue(checks["working-tree"].ok)
+        self.assertTrue(checks["working-tree"].ok, checks["working-tree"].detail)
         self.assertTrue(checks["configuration"].ok)
 
     def test_invalid_repository_and_config(self) -> None:
