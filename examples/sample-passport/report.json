@@ -1,0 +1,114 @@
+{
+  "base_ref": "80595bd0b691cbf7d486d5cf3f9efd7d2d965869",
+  "base_sha": "80595bd0b691cbf7d486d5cf3f9efd7d2d965869",
+  "changed_files": [
+    {
+      "added_lines": 1,
+      "binary": false,
+      "deleted_lines": 1,
+      "old_path": null,
+      "path": "calculator.py",
+      "status": "M"
+    }
+  ],
+  "command_results": [
+    {
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_regression"
+      ],
+      "duration_seconds": 0.718,
+      "exit_code": 1,
+      "expected_exit": "base_nonzero_head_zero",
+      "name": "reproduce-addition-bug",
+      "passed": true,
+      "phase": "base",
+      "required": true,
+      "stderr": "F\n======================================================================\nFAIL: test_two_plus_three_is_five (tests.test_regression.AdditionRegressionTest.test_two_plus_three_is_five)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/tmp/patchlab-base-ubhhhbax/repo/tests/test_regression.py\", line 6, in test_two_plus_three_is_five\n    self.assertEqual(add(2, 3), 5)\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^\nAssertionError: -1 != 5\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nFAILED (failures=1)\n",
+      "stdout": "",
+      "timed_out": false
+    },
+    {
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "tests.test_regression"
+      ],
+      "duration_seconds": 0.666,
+      "exit_code": 0,
+      "expected_exit": "base_nonzero_head_zero",
+      "name": "reproduce-addition-bug",
+      "passed": true,
+      "phase": "head",
+      "required": true,
+      "stderr": ".\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n",
+      "stdout": "",
+      "timed_out": false
+    },
+    {
+      "command": [
+        "python",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tests",
+        "-v"
+      ],
+      "duration_seconds": 0.668,
+      "exit_code": 0,
+      "expected_exit": "zero",
+      "name": "full-test-suite",
+      "passed": true,
+      "phase": "head",
+      "required": true,
+      "stderr": "test_two_plus_three_is_five (test_regression.AdditionRegressionTest.test_two_plus_three_is_five) ... ok\n\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n",
+      "stdout": "",
+      "timed_out": false
+    }
+  ],
+  "findings": [],
+  "generated_at": "2026-08-16T15:05:57Z",
+  "head_ref": "6c7e18d0a57caf878a8e5b80f8ff889b3b2f7105",
+  "head_sha": "6c7e18d0a57caf878a8e5b80f8ff889b3b2f7105",
+  "metadata": {
+    "base_commit": {
+      "author_name": "PatchLab Demo",
+      "authored_at": "2026-08-16T15:05:55Z",
+      "commit": "80595bd0b691cbf7d486d5cf3f9efd7d2d965869",
+      "subject": "add reproducible calculator defect",
+      "tree": "94ea469297284917da3e46149bca11a8f68466d9"
+    },
+    "config_location": "base:patchlab.toml",
+    "config_sha256": "de1d55e8cc7d2b8671f9fa432b85abe281921d48c3fb58d0a62959383b33a875",
+    "config_source": "base",
+    "environment": "local",
+    "fail_on_review": false,
+    "head_commit": {
+      "author_name": "PatchLab Demo",
+      "authored_at": "2026-08-16T15:05:55Z",
+      "commit": "6c7e18d0a57caf878a8e5b80f8ff889b3b2f7105",
+      "subject": "correct calculator addition",
+      "tree": "933780c373b1edbfacd810bb3b8366e23772fdbf"
+    },
+    "human_review_required": true,
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+    "python": "3.13.5"
+  },
+  "outcome": "pass",
+  "project_name": "patchlab-demo-calculator",
+  "repository": "https://github.com/patchlab/examples.git",
+  "schema_version": "1.0.0",
+  "summary": {
+    "blocking_findings": 0,
+    "changed_files": 1,
+    "commands": 3,
+    "commands_passed": 3,
+    "findings": 0,
+    "review_findings": 0
+  },
+  "tool_version": "0.1.0"
+}

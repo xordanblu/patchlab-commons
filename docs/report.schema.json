@@ -1,0 +1,411 @@
+{
+  "$defs": {
+    "changedFile": {
+      "additionalProperties": false,
+      "properties": {
+        "added_lines": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "binary": {
+          "type": "boolean"
+        },
+        "deleted_lines": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "old_path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "path": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "status": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "path",
+        "old_path",
+        "added_lines",
+        "deleted_lines",
+        "binary"
+      ],
+      "type": "object"
+    },
+    "commandResult": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "duration_seconds": {
+          "minimum": 0,
+          "type": "number"
+        },
+        "exit_code": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "expected_exit": {
+          "enum": [
+            "zero",
+            "nonzero",
+            "base_nonzero_head_zero"
+          ]
+        },
+        "name": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "phase": {
+          "enum": [
+            "base",
+            "head"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "stderr": {
+          "type": "string"
+        },
+        "stdout": {
+          "type": "string"
+        },
+        "timed_out": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "phase",
+        "command",
+        "required",
+        "expected_exit",
+        "exit_code",
+        "passed",
+        "timed_out",
+        "duration_seconds",
+        "stdout",
+        "stderr"
+      ],
+      "type": "object"
+    },
+    "commitMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "author_name": {
+          "type": "string"
+        },
+        "authored_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "commit": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "tree": {
+          "$ref": "#/$defs/gitSha"
+        }
+      },
+      "required": [
+        "commit",
+        "tree",
+        "authored_at",
+        "author_name",
+        "subject"
+      ],
+      "type": "object"
+    },
+    "finding": {
+      "additionalProperties": false,
+      "properties": {
+        "disposition": {
+          "enum": [
+            "allow",
+            "review",
+            "deny"
+          ]
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "message": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "recommendation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "rule_id": {
+          "pattern": "^PL-[A-Z]+-[0-9]{3}$",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ]
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id",
+        "title",
+        "message",
+        "severity",
+        "disposition",
+        "file",
+        "line",
+        "evidence",
+        "recommendation",
+        "tags"
+      ],
+      "type": "object"
+    },
+    "gitSha": {
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+      "type": "string"
+    },
+    "metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "base_commit": {
+          "$ref": "#/$defs/commitMetadata"
+        },
+        "config_location": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "config_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "config_source": {
+          "enum": [
+            "base",
+            "head",
+            "working-tree"
+          ]
+        },
+        "environment": {
+          "enum": [
+            "local",
+            "github-actions"
+          ]
+        },
+        "fail_on_review": {
+          "type": "boolean"
+        },
+        "head_commit": {
+          "$ref": "#/$defs/commitMetadata"
+        },
+        "human_review_required": {
+          "type": "boolean"
+        },
+        "platform": {
+          "type": "string"
+        },
+        "python": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "platform",
+        "python",
+        "base_commit",
+        "head_commit",
+        "human_review_required",
+        "fail_on_review",
+        "environment",
+        "config_source",
+        "config_location",
+        "config_sha256"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "summary": {
+      "additionalProperties": false,
+      "properties": {
+        "blocking_findings": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "changed_files": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "commands": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "commands_passed": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "findings": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "review_findings": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "changed_files",
+        "commands",
+        "commands_passed",
+        "findings",
+        "blocking_findings",
+        "review_findings"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/xordanblu/patchlab-commons/v0.1.0/docs/report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Machine-readable evidence for one base-to-candidate Git comparison.",
+  "properties": {
+    "base_ref": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "base_sha": {
+      "$ref": "#/$defs/gitSha"
+    },
+    "changed_files": {
+      "items": {
+        "$ref": "#/$defs/changedFile"
+      },
+      "type": "array"
+    },
+    "command_results": {
+      "items": {
+        "$ref": "#/$defs/commandResult"
+      },
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/finding"
+      },
+      "type": "array"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "head_ref": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "head_sha": {
+      "$ref": "#/$defs/gitSha"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "outcome": {
+      "enum": [
+        "pass",
+        "needs_review",
+        "fail"
+      ]
+    },
+    "project_name": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "repository": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    },
+    "tool_version": {
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "tool_version",
+    "project_name",
+    "generated_at",
+    "repository",
+    "base_ref",
+    "base_sha",
+    "head_ref",
+    "head_sha",
+    "outcome",
+    "summary",
+    "changed_files",
+    "command_results",
+    "findings",
+    "metadata"
+  ],
+  "title": "PatchLab Patch Passport Report",
+  "type": "object"
+}

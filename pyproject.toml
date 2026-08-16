@@ -1,0 +1,64 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "patchlab-commons"
+version = "0.1.0"
+description = "Evidence-first verification and Patch Passports for software changes."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+  {name = "Jordan García Morales"}
+]
+keywords = ["open-source", "security", "code-review", "github-actions", "ai-agents", "supply-chain"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+  "Topic :: Software Development :: Testing",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "coverage>=7.6",
+  "jsonschema>=4.23",
+]
+
+[project.urls]
+Homepage = "https://github.com/xordanblu/patchlab-commons"
+Documentation = "https://github.com/xordanblu/patchlab-commons/tree/main/docs"
+Issues = "https://github.com/xordanblu/patchlab-commons/issues"
+Source = "https://github.com/xordanblu/patchlab-commons"
+
+[project.scripts]
+patchlab = "patchlab.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+patchlab = ["py.typed"]
+
+[tool.coverage.run]
+branch = true
+source = ["patchlab"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 85

@@ -1,0 +1,38 @@
+[project]
+name = "patchlab-commons"
+
+[scope]
+allow = ["**"]
+deny = ["**/*.pem", "**/*.key", ".env", ".env.*"]
+max_files = 200
+max_added_lines = 20000
+max_deleted_lines = 10000
+
+[policy]
+dependency_changes = "review"
+workflow_changes = "review"
+dangerous_permissions = "deny"
+secret_exposure = "deny"
+network_additions = "review"
+test_weakening = "deny"
+binary_files = "review"
+generated_files = "review"
+fail_on_review = false
+require_clean_worktree = false
+require_human_review = true
+
+[[commands]]
+name = "compile"
+command = ["python", "-m", "compileall", "-q", "src", "tests"]
+run_on = "head"
+expected_exit = "zero"
+timeout_seconds = 60
+required = true
+
+[[commands]]
+name = "unit-and-integration-tests"
+command = ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
+run_on = "head"
+expected_exit = "zero"
+timeout_seconds = 180
+required = true

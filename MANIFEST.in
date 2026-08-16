@@ -1,0 +1,23 @@
+include .editorconfig
+include .gitattributes
+include .gitignore
+include Makefile
+include action.yml
+include CHANGELOG.md
+include CITATION.cff
+include CODE_OF_CONDUCT.md
+include CONTRIBUTING.md
+include GOVERNANCE.md
+include LICENSE
+include NOTICE
+include README.es.md
+include README.md
+include SECURITY.md
+include SUPPORT.md
+include patchlab.toml
+recursive-include docs *
+recursive-include examples *
+recursive-include scripts *.py
+recursive-include .github *.md *.yml
+prune **/__pycache__
+exclude .coverage

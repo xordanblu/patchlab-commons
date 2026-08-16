@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="150" viewBox="0 0 760 150" role="img" aria-labelledby="title desc">
+  <title id="title">PatchLab Commons</title>
+  <desc id="desc">A shield containing a verified software patch.</desc>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7457ff"/>
+      <stop offset="1" stop-color="#13c8b5"/>
+    </linearGradient>
+  </defs>
+  <rect width="760" height="150" rx="30" fill="#0d1020"/>
+  <path d="M78 19 126 37v34c0 32-19 51-48 64C49 122 30 103 30 71V37z" fill="url(#g)"/>
+  <path d="m55 76 14 14 31-35" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M152 41h20v68h-20M220 41h-20v68h20" fill="none" stroke="#9a8cff" stroke-width="7" stroke-linecap="round"/>
+  <text x="252" y="72" fill="#f7f8ff" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="45" font-weight="750">PatchLab</text>
+  <text x="252" y="112" fill="#aeb6d4" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="28" font-weight="500">Commons</text>
+  <text x="448" y="110" fill="#6f789a" font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="17">evidence before confidence</text>
+</svg>

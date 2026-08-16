@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size": {
+          "maximum": 33554432,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sha256",
+        "size"
+      ],
+      "type": "object"
+    },
+    "gitSha": {
+      "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$",
+      "type": "string"
+    },
+    "identity": {
+      "additionalProperties": false,
+      "properties": {
+        "base_sha": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "config_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "config_source": {
+          "enum": [
+            "base",
+            "head",
+            "working-tree"
+          ]
+        },
+        "generated_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "head_sha": {
+          "$ref": "#/$defs/gitSha"
+        },
+        "outcome": {
+          "enum": [
+            "pass",
+            "needs_review",
+            "fail"
+          ]
+        },
+        "project": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "repository": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "tool_version": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "project",
+        "repository",
+        "base_sha",
+        "head_sha",
+        "outcome",
+        "generated_at",
+        "tool_version",
+        "config_source",
+        "config_sha256"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "https://raw.githubusercontent.com/xordanblu/patchlab-commons/v0.1.0/docs/passport.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Digest manifest and identity for a Patch Passport bundle.",
+  "properties": {
+    "artifacts": {
+      "additionalProperties": false,
+      "properties": {
+        "report.json": {
+          "$ref": "#/$defs/artifact"
+        },
+        "report.md": {
+          "$ref": "#/$defs/artifact"
+        },
+        "results.sarif": {
+          "$ref": "#/$defs/artifact"
+        }
+      },
+      "required": [
+        "report.json",
+        "report.md",
+        "results.sarif"
+      ],
+      "type": "object"
+    },
+    "identity": {
+      "$ref": "#/$defs/identity"
+    },
+    "schema_version": {
+      "const": "1.0.0",
+      "type": "string"
+    },
+    "verification": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "sha256"
+        },
+        "artifact_input": {
+          "const": "raw file bytes"
+        },
+        "manifest_serialization": {
+          "const": "UTF-8 JSON, sorted keys, 2-space indentation"
+        }
+      },
+      "required": [
+        "algorithm",
+        "artifact_input",
+        "manifest_serialization"
+      ],
+      "type": "object"
+    }
+  },
+  "required": [
+    "schema_version",
+    "identity",
+    "artifacts",
+    "verification"
+  ],
+  "title": "PatchLab Patch Passport Manifest",
+  "type": "object"
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title">
+  <title id="title">PatchLab Commons mark</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7457ff"/>
+      <stop offset="1" stop-color="#13c8b5"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="58" fill="#0d1020"/>
+  <path d="M128 30 202 58v52c0 50-29 79-74 99-45-20-74-49-74-99V58z" fill="url(#g)"/>
+  <path d="m91 117 23 23 50-57" fill="none" stroke="#fff" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

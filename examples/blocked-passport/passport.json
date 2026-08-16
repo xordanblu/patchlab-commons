@@ -1,0 +1,33 @@
+{
+  "artifacts": {
+    "report.json": {
+      "sha256": "9fe29d3414942af4db6f3869c3caad66c5c570896d4f35bcd394f617c55be739",
+      "size": 5455
+    },
+    "report.md": {
+      "sha256": "6dd97a85fde23d496ea2cb94d08f7735c084dda622703ca8b4e9d2e60531439a",
+      "size": 2588
+    },
+    "results.sarif": {
+      "sha256": "e0ded73c4c8a45f0f27efa1161c99edd915407159134c7059d2d372ec41dd56e",
+      "size": 10008
+    }
+  },
+  "identity": {
+    "base_sha": "f5232c951115ad94f350d5272499e601a95d5e75",
+    "config_sha256": "d670071bbe55badeed997c15f229cbf07deb23c646f447f91775eee493b3835c",
+    "config_source": "base",
+    "generated_at": "2026-08-16T15:05:58Z",
+    "head_sha": "5004d7fba488e97112b6e646d4458aa730d78f2b",
+    "outcome": "fail",
+    "project": "patchlab-blocked-workflow-demo",
+    "repository": "https://github.com/patchlab/examples.git",
+    "tool_version": "0.1.0"
+  },
+  "schema_version": "1.0.0",
+  "verification": {
+    "algorithm": "sha256",
+    "artifact_input": "raw file bytes",
+    "manifest_serialization": "UTF-8 JSON, sorted keys, 2-space indentation"
+  }
+}

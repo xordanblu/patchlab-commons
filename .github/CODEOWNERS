@@ -1,0 +1,9 @@
+* @xordanblu
+
+# Policy and automation need an explicit maintainer review.
+/patchlab.toml @xordanblu
+/action.yml @xordanblu
+/.github/workflows/ @xordanblu
+/src/patchlab/checks/ @xordanblu
+/src/patchlab/passport.py @xordanblu
+/src/patchlab/runner.py @xordanblu

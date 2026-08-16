@@ -1,0 +1,33 @@
+{
+  "artifacts": {
+    "report.json": {
+      "sha256": "c1d991dac1b6af5d2b89f9db9d2846a914f7f1db0abc016ff1cca839daa021f7",
+      "size": 3910
+    },
+    "report.md": {
+      "sha256": "f23db8429bc5cce74967e71271758b4cfeb854aeca79ef5762b0ec68c5b5f248",
+      "size": 1207
+    },
+    "results.sarif": {
+      "sha256": "d09367292d3f6a25d3b4b3c05be6e31e939750f9d9f13484a1a7ab9e9f8f5980",
+      "size": 678
+    }
+  },
+  "identity": {
+    "base_sha": "80595bd0b691cbf7d486d5cf3f9efd7d2d965869",
+    "config_sha256": "de1d55e8cc7d2b8671f9fa432b85abe281921d48c3fb58d0a62959383b33a875",
+    "config_source": "base",
+    "generated_at": "2026-08-16T15:05:57Z",
+    "head_sha": "6c7e18d0a57caf878a8e5b80f8ff889b3b2f7105",
+    "outcome": "pass",
+    "project": "patchlab-demo-calculator",
+    "repository": "https://github.com/patchlab/examples.git",
+    "tool_version": "0.1.0"
+  },
+  "schema_version": "1.0.0",
+  "verification": {
+    "algorithm": "sha256",
+    "artifact_input": "raw file bytes",
+    "manifest_serialization": "UTF-8 JSON, sorted keys, 2-space indentation"
+  }
+}

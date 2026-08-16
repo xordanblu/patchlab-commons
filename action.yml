@@ -1,0 +1,178 @@
+name: PatchLab Passport
+description: Create an evidence-first Patch Passport for a software change.
+author: PatchLab Commons
+
+branding:
+  icon: shield
+  color: purple
+
+inputs:
+  base:
+    description: Base Git ref or commit SHA.
+    required: true
+  head:
+    description: Candidate Git ref or commit SHA.
+    required: true
+  repository:
+    description: Repository directory inside the checked-out workspace.
+    required: false
+    default: .
+  config:
+    description: Path to patchlab.toml, relative to the repository.
+    required: false
+    default: patchlab.toml
+  config-source:
+    description: Trusted revision for patchlab.toml. Use base for pull requests.
+    required: false
+    default: base
+  output:
+    description: Directory for reports and the passport bundle.
+    required: false
+    default: .patchlab/out
+  fail-on-review:
+    description: Fail when a policy requires human review.
+    required: false
+    default: "true"
+
+outputs:
+  outcome:
+    description: pass, needs_review, or fail.
+    value: ${{ steps.verify.outputs.outcome }}
+  report:
+    description: Path to report.json.
+    value: ${{ steps.verify.outputs.report }}
+  markdown:
+    description: Path to report.md.
+    value: ${{ steps.verify.outputs.markdown }}
+  sarif:
+    description: Path to results.sarif.
+    value: ${{ steps.verify.outputs.sarif }}
+  passport:
+    description: Path to passport.json.
+    value: ${{ steps.verify.outputs.passport }}
+  bundle:
+    description: Path to patchlab-passport.tar.gz.
+    value: ${{ steps.verify.outputs.bundle }}
+  bundle-sha256:
+    description: SHA-256 digest of the passport bundle.
+    value: ${{ steps.verify.outputs.bundle_sha256 }}
+  sidecar:
+    description: Path to patchlab-passport.tar.gz.sha256.
+    value: ${{ steps.verify.outputs.sidecar }}
+  exit-code:
+    description: PatchLab process exit code.
+    value: ${{ steps.verify.outputs.exit_code }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install PatchLab Commons
+      shell: bash
+      run: python -m pip install --no-deps --disable-pip-version-check "${{ github.action_path }}"
+
+    - name: Create Patch Passport
+      id: verify
+      shell: bash
+      env:
+        PATCHLAB_BASE: ${{ inputs.base }}
+        PATCHLAB_HEAD: ${{ inputs.head }}
+        PATCHLAB_REPOSITORY: ${{ inputs.repository }}
+        PATCHLAB_CONFIG: ${{ inputs.config }}
+        PATCHLAB_OUTPUT: ${{ inputs.output }}
+        PATCHLAB_CONFIG_SOURCE: ${{ inputs['config-source'] }}
+        PATCHLAB_FAIL_ON_REVIEW: ${{ inputs['fail-on-review'] }}
+      run: |
+        case "$PATCHLAB_FAIL_ON_REVIEW" in
+          true|false) ;;
+          *)
+            echo "fail-on-review must be true or false" >&2
+            exit 64
+            ;;
+        esac
+
+        args=(
+          verify
+          --repo "$PATCHLAB_REPOSITORY"
+          --base "$PATCHLAB_BASE"
+          --head "$PATCHLAB_HEAD"
+          --config "$PATCHLAB_CONFIG"
+          --config-source "$PATCHLAB_CONFIG_SOURCE"
+          --output "$PATCHLAB_OUTPUT"
+        )
+        if [[ "$PATCHLAB_FAIL_ON_REVIEW" == "true" ]]; then
+          args+=(--fail-on-review)
+        else
+          args+=(--allow-review)
+        fi
+
+        set +e
+        python -m patchlab "${args[@]}"
+        status=$?
+        set -e
+
+        python - "$PATCHLAB_REPOSITORY" "$PATCHLAB_OUTPUT" "$GITHUB_OUTPUT" "$status" <<'PY'
+        import json
+        import os
+        from pathlib import Path
+        import re
+        import sys
+        import uuid
+
+        repository = Path(sys.argv[1]).resolve()
+        requested = Path(sys.argv[2])
+        if requested.is_absolute():
+            output = requested
+        else:
+            candidate = (repository / requested).resolve()
+            try:
+                candidate.relative_to(repository)
+            except ValueError:
+                candidate = repository / ".patchlab" / "invalid-output"
+            output = candidate
+        github_output = Path(sys.argv[3])
+        exit_code = sys.argv[4]
+
+        report = output / "report.json"
+        markdown = output / "report.md"
+        sarif = output / "results.sarif"
+        passport = output / "passport.json"
+        bundle = output / "patchlab-passport.tar.gz"
+        sidecar = output / "patchlab-passport.tar.gz.sha256"
+
+        outcome = "fail"
+        if report.is_file():
+            try:
+                candidate_outcome = json.loads(report.read_text(encoding="utf-8")).get("outcome")
+            except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+                candidate_outcome = None
+            if candidate_outcome in {"pass", "needs_review", "fail"}:
+                outcome = candidate_outcome
+
+        digest = ""
+        if sidecar.is_file():
+            first = sidecar.read_text(encoding="utf-8").split()
+            if first and re.fullmatch(r"[0-9a-f]{64}", first[0]):
+                digest = first[0]
+
+        def emit(name: str, value: str) -> None:
+            delimiter = f"patchlab_{uuid.uuid4().hex}"
+            with github_output.open("a", encoding="utf-8") as handle:
+                handle.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+
+        emit("outcome", outcome)
+        emit("report", str(report))
+        emit("markdown", str(markdown))
+        emit("sarif", str(sarif))
+        emit("passport", str(passport))
+        emit("bundle", str(bundle))
+        emit("bundle_sha256", digest)
+        emit("sidecar", str(sidecar))
+        emit("exit_code", exit_code)
+
+        summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+        if summary_path and markdown.is_file():
+            with Path(summary_path).open("a", encoding="utf-8") as handle:
+                handle.write(markdown.read_text(encoding="utf-8"))
+                handle.write("\n")
+        PY
+        exit "$status"

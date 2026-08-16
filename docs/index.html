@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="PatchLab Commons creates evidence-first Patch Passports for software changes.">
+  <title>PatchLab Commons</title>
+  <link rel="icon" href="assets/mark.svg" type="image/svg+xml">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #090b13;
+      --panel: #111522;
+      --text: #f5f7ff;
+      --muted: #a7aec4;
+      --line: #29304a;
+      --accent: #8b7cff;
+      --accent-2: #5de4c7;
+      --danger: #ff6b86;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(circle at 20% 0%, #171b35 0, var(--bg) 34rem); color: var(--text); }
+    a { color: inherit; }
+    .wrap { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 24px 0; }
+    .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: -0.03em; text-decoration: none; }
+    .brand span { color: var(--text); }
+    nav .links { display: flex; gap: 18px; color: var(--muted); font-size: 14px; }
+    .hero { padding: 88px 0 60px; display: grid; grid-template-columns: 1.15fr 0.85fr; gap: 60px; align-items: center; }
+    .eyebrow { display: inline-flex; border: 1px solid var(--line); background: rgba(17,21,34,.72); border-radius: 999px; padding: 7px 11px; color: var(--accent-2); font-size: 13px; }
+    h1 { font-size: clamp(48px, 7vw, 88px); line-height: .96; letter-spacing: -0.065em; margin: 24px 0; max-width: 820px; }
+    .lead { color: var(--muted); font-size: 20px; line-height: 1.55; max-width: 700px; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+    .button { text-decoration: none; padding: 13px 18px; border-radius: 10px; font-weight: 700; border: 1px solid var(--line); }
+    .button.primary { background: var(--accent); color: #090b13; border-color: transparent; }
+    .terminal { background: rgba(17,21,34,.9); border: 1px solid var(--line); border-radius: 18px; overflow: hidden; box-shadow: 0 28px 90px rgba(0,0,0,.35); }
+    .terminal-bar { padding: 13px 16px; border-bottom: 1px solid var(--line); display: flex; gap: 7px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: #3a415c; }
+    pre { margin: 0; padding: 24px; overflow: auto; color: #dfe4ff; font-size: 14px; line-height: 1.7; }
+    .ok { color: var(--accent-2); }
+    .warn { color: #ffd580; }
+    section { padding: 72px 0; }
+    h2 { font-size: clamp(34px, 5vw, 54px); letter-spacing: -0.045em; margin: 0 0 16px; }
+    .section-lead { color: var(--muted); max-width: 720px; font-size: 18px; line-height: 1.6; }
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 36px; }
+    .card { padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: rgba(17,21,34,.72); }
+    .card b { display: block; margin-bottom: 10px; }
+    .card p { margin: 0; color: var(--muted); line-height: 1.55; }
+    .passport { border: 1px solid var(--line); border-radius: 20px; background: linear-gradient(145deg, rgba(139,124,255,.12), rgba(93,228,199,.06)); padding: 30px; margin-top: 36px; }
+    .passport-row { display: flex; justify-content: space-between; gap: 20px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+    .passport-row:last-child { border-bottom: 0; }
+    .passport-row span:first-child { color: var(--muted); }
+    footer { border-top: 1px solid var(--line); padding: 36px 0 54px; color: var(--muted); display: flex; justify-content: space-between; gap: 20px; }
+    @media (max-width: 820px) {
+      .hero { grid-template-columns: 1fr; padding-top: 50px; }
+      .grid { grid-template-columns: 1fr; }
+      nav .links { display: none; }
+      footer { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <nav>
+      <a class="brand" href="index.html" aria-label="PatchLab Commons home"><img src="assets/mark.svg" width="34" height="34" alt=""><span>PatchLab Commons</span></a>
+      <div class="links">
+        <a href="../README.md">Docs</a>
+        <a href="ARCHITECTURE.md">Architecture</a>
+        <a href="THREAT_MODEL.md">Security</a>
+        <a href="https://github.com/xordanblu/patchlab-commons">GitHub</a>
+      </div>
+    </nav>
+
+    <main>
+      <div class="hero">
+        <div>
+          <div class="eyebrow">Open source · Evidence first · Human controlled</div>
+          <h1>Make every patch prove its case.</h1>
+          <p class="lead">PatchLab compares the broken state with the proposed fix. It runs independent checks and creates a portable Patch Passport for maintainers.</p>
+          <div class="actions">
+            <a class="button primary" href="https://github.com/xordanblu/patchlab-commons">View on GitHub</a>
+            <a class="button" href="../README.es.md">Leer en español</a>
+          </div>
+        </div>
+        <div class="terminal" aria-label="PatchLab command example">
+          <div class="terminal-bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div>
+          <pre>$ patchlab verify \
+  --base HEAD~1 \
+  --head HEAD
+
+<span class="ok">PatchLab outcome: pass</span>
+Changed files: 1
+Commands: 3/3 passed
+Findings: 0
+
+<span class="ok">Passport created</span>
+SHA-256: 2a2f4756…
+
+$ python scripts/run_attack_demo.py
+<span class="warn">PatchLab outcome: fail</span>
+Blocked: write permission, unsafe trigger</pre>
+        </div>
+      </div>
+
+      <section>
+        <h2>A line diff is not enough.</h2>
+        <p class="section-lead">PatchLab records behavior, scope, permissions, capabilities, and integrity. The same standard applies to human and AI-assisted changes.</p>
+        <div class="grid">
+          <div class="card"><b>Reproduce first</b><p>Require the defect to fail on the base revision and pass on the candidate revision.</p></div>
+          <div class="card"><b>Review new powers</b><p>Detect permission, network, dependency, secret, and workflow changes.</p></div>
+          <div class="card"><b>Carry the evidence</b><p>Export JSON, Markdown, SARIF, and a deterministic archive with SHA-256.</p></div>
+          <div class="card"><b>Trust the base policy</b><p>A candidate patch cannot silently weaken the rules used to judge itself.</p></div>
+          <div class="card"><b>Protect the output</b><p>Bounded archives, safe paths, atomic writes, and strict verification reduce evidence tampering.</p></div>
+          <div class="card"><b>Keep people in control</b><p>PatchLab can block or request review. It does not merge or approve code.</p></div>
+        </div>
+      </section>
+
+      <section>
+        <h2>The Patch Passport</h2>
+        <p class="section-lead">A clear record of what was tested and what still needs a person.</p>
+        <div class="passport">
+          <div class="passport-row"><span>Defect reproduced on base</span><strong class="ok">YES</strong></div>
+          <div class="passport-row"><span>Correction verified on candidate</span><strong class="ok">YES</strong></div>
+          <div class="passport-row"><span>Required commands</span><strong class="ok">3 / 3</strong></div>
+          <div class="passport-row"><span>Write permissions added</span><strong class="ok">NONE</strong></div>
+          <div class="passport-row"><span>Human review</span><strong class="warn">REQUIRED</strong></div>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>Apache-2.0 · Built for open-source maintainers.</span>
+      <span>PatchLab records evidence. Maintainers decide.</span>
+    </footer>
+  </div>
+</body>
+</html>

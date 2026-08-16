@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible defect in PatchLab Commons.
+title: "[Bug]: "
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: Do not report an unpatched security vulnerability here. Follow SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: PatchLab version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: Python 3.12, Ubuntu 24.04, Git 2.x
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Use the smallest safe example.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    id: passport
+    attributes:
+      label: Sanitized Patch Passport or report
+      description: Remove secrets and private repository data.

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "patchlab/80595bd0b691..6c7e18d0a57c"
+      },
+      "properties": {
+        "baseSha": "80595bd0b691cbf7d486d5cf3f9efd7d2d965869",
+        "headSha": "6c7e18d0a57caf878a8e5b80f8ff889b3b2f7105",
+        "outcome": "pass",
+        "project": "patchlab-demo-calculator"
+      },
+      "results": [],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/xordanblu/patchlab-commons",
+          "name": "PatchLab Commons",
+          "rules": [],
+          "version": "0.1.0"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}

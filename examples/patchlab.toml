@@ -1,0 +1,38 @@
+[project]
+name = "example-project"
+
+[scope]
+allow = ["src/**", "tests/**", "pyproject.toml", "package.json", ".github/workflows/**"]
+deny = ["**/*.pem", "**/*.key", ".env", ".env.*"]
+max_files = 60
+max_added_lines = 2500
+max_deleted_lines = 2500
+
+[policy]
+dependency_changes = "review"
+workflow_changes = "review"
+dangerous_permissions = "deny"
+secret_exposure = "deny"
+network_additions = "review"
+test_weakening = "deny"
+binary_files = "review"
+generated_files = "review"
+fail_on_review = false
+require_clean_worktree = false
+require_human_review = true
+
+[[commands]]
+name = "regression"
+command = ["python", "-m", "unittest", "tests.test_regression"]
+run_on = "both"
+expected_exit = "base_nonzero_head_zero"
+timeout_seconds = 120
+required = true
+
+[[commands]]
+name = "tests"
+command = ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
+run_on = "head"
+expected_exit = "zero"
+timeout_seconds = 300
+required = true

