@@ -92,7 +92,10 @@ def check_secret_exposure(context: CheckContext) -> list[Finding]:
 
 def _looks_placeholder(text: str) -> bool:
     lower = text.lower()
-    return any(word in lower for word in ("example", "placeholder", "changeme", "your_", "test-token", "dummy"))
+    return any(
+        word in lower
+        for word in ("example", "placeholder", "changeme", "your_", "test-token", "dummy")
+    )
 
 
 def _redact(text: str) -> str:

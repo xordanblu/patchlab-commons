@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from patchlab_commons.engine import VerificationEngine, VerificationRequest
 from patchlab_commons.schema import passport_schema, report_schema
-
 from tests.helpers import commit_all, init_repo
 
 try:

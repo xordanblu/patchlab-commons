@@ -21,6 +21,7 @@ All notable changes are documented here.
 - Hardened the composite action against `pip`, `patchlab_commons`, `sitecustomize`, `usercustomize`, `PYTHONPATH`, and same-name module replacement.
 - Replaced command snapshots based on Git checkout/export behavior with direct Git object materialization.
 - Added a minimal Git environment that removes repository, object, config, diff, credential, SSH, and hook overrides.
+- Disabled Git replacement objects and lazy object fetches, and rejected grafts, alternate object stores, symlinked metadata, and Git metadata outside the untrusted repository boundary.
 - Added strict handling for symbolic links, gitlinks, nonportable paths, invalid UTF-8 paths, file counts, and snapshot byte limits.
 - Added hard Git command time limits and rejected Python, Git, or container-runtime executables located anywhere inside the declared untrusted caller workspace.
 - Added bounded Passport decompression and required execution identity fields to agree with the recorded boundary.
@@ -46,6 +47,7 @@ All notable changes are documented here.
 - Updated the report and passport schemas to 1.1.0.
 - Made static analysis the default execution mode.
 - Preserved the historical `v0.1.0` tag without moving it.
+- Made `v0.2.0` a stable GitHub release and made release automation ignore the historical `v0.1.0` tag.
 
 ## [0.1.0] - 2026-08-16
 

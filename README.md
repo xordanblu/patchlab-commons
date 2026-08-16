@@ -266,7 +266,7 @@ Ready-to-inspect outputs live in [`examples/sample-passport`](examples/sample-pa
 
 PatchLab protects its coordinator from common Python import replacement and hostile Git process variables. The composite action starts Python with isolated and no-site flags. It imports only the action's own source tree. It does not run `pip` during bootstrap.
 
-Git operations use a minimal, non-interactive environment. Snapshots have file-count, member-size, total-size, path, file-mode, and symbolic-link limits.
+Git operations use a minimal, non-interactive environment. Replacement objects and lazy object fetches are disabled; grafts, alternate object stores, symlinked metadata, and metadata outside the repository boundary are rejected. Snapshots have file-count, member-size, total-size, path, file-mode, and symbolic-link limits.
 
 The trusted coordinator writes and verifies final evidence outside the untrusted container.
 

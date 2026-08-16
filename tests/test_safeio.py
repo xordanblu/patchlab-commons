@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from patchlab_commons.safeio import (
     UnsafeOutputPath,
@@ -17,7 +17,7 @@ from patchlab_commons.safeio import (
 class SafeIoTests(unittest.TestCase):
     def test_relative_output_stays_inside_repository(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
-            root = Path(temp)
+            root = Path(temp).resolve()
             target = resolve_output_directory(root, Path(".patchlab/out"))
             self.assertEqual(target, root / ".patchlab" / "out")
 

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from patchlab_commons.checks import CheckContext, run_checks
 from patchlab_commons.config import PatchLabConfig, PolicyConfig, ScopeConfig
@@ -74,7 +74,9 @@ class ExtendedPolicyCheckTests(unittest.TestCase):
 
     def test_sensitive_file_path(self) -> None:
         files = (ChangedFile("A", "certs/service.pem", added_lines=1, deleted_lines=0),)
-        self.assertIn("PL-SECRET-001", {item.rule_id for item in run_checks(self.context("", files))})
+        self.assertIn(
+            "PL-SECRET-001", {item.rule_id for item in run_checks(self.context("", files))}
+        )
 
     def test_workflow_risk_patterns(self) -> None:
         diff = """diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
@@ -118,7 +120,9 @@ class ExtendedPolicyCheckTests(unittest.TestCase):
 +requests.get("https://example.invalid")
 """
         findings = run_checks(
-            self.context(diff, (ChangedFile("A", "app.py", added_lines=1, deleted_lines=0),), policy=policy)
+            self.context(
+                diff, (ChangedFile("A", "app.py", added_lines=1, deleted_lines=0),), policy=policy
+            )
         )
         network = next(item for item in findings if item.rule_id == "PL-NET-001")
         self.assertEqual(network.disposition, Disposition.ALLOW)

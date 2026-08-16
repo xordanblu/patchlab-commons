@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import stat
-import subprocess
 import sys
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from patchlab_commons.config import CommandConfig, ExecutionConfig
@@ -23,11 +22,17 @@ from patchlab_commons.runner import (
     select_executor,
 )
 
-
 _DIGEST_IMAGE = "python@sha256:" + ("a" * 64)
 
 
 class ExecutionSecurityTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # Exercise the Linux-only selection logic on every host. Dedicated
+        # tests below still assert that real non-Linux selection fails closed.
+        linux = patch("patchlab_commons.runner.sys_platform_linux", return_value=True)
+        linux.start()
+        self.addCleanup(linux.stop)
+
     def test_static_executor_never_runs_commands(self) -> None:
         selected = select_executor(ExecutionConfig(mode="static"))
         self.assertEqual(selected.mode, "static")
@@ -36,9 +41,7 @@ class ExecutionSecurityTests(unittest.TestCase):
     def test_native_executor_requires_explicit_acknowledgement(self) -> None:
         with self.assertRaisesRegex(ExecutionUnavailable, "requires"):
             select_executor(ExecutionConfig(mode="native"))
-        selected = select_executor(
-            ExecutionConfig(mode="native", allow_unsafe_native=True)
-        )
+        selected = select_executor(ExecutionConfig(mode="native", allow_unsafe_native=True))
         self.assertEqual(selected.mode, "native")
         self.assertTrue(selected.network)
         self.assertEqual(selected.label, "native")
@@ -241,6 +244,13 @@ class ExecutionSecurityTests(unittest.TestCase):
 
 
 class ContainerRuntimeBehaviorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # These fake-runtime tests validate Linux container orchestration, not
+        # host detection. The explicit non-Linux test overrides this patch.
+        linux = patch("patchlab_commons.runner.sys_platform_linux", return_value=True)
+        linux.start()
+        self.addCleanup(linux.stop)
+
     def _runtime(self, body: str) -> Path:
         directory = Path(tempfile.mkdtemp())
         runtime = directory / "fake-runtime"
@@ -383,12 +393,8 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
     def test_non_linux_container_and_auto_paths_are_explicit(self) -> None:
         with patch("patchlab_commons.runner.sys_platform_linux", return_value=False):
             with self.assertRaisesRegex(ExecutionUnavailable, "Linux"):
-                select_executor(
-                    ExecutionConfig(mode="container", container_image=_DIGEST_IMAGE)
-                )
-            selected = select_executor(
-                ExecutionConfig(mode="auto", allow_unsafe_native=True)
-            )
+                select_executor(ExecutionConfig(mode="container", container_image=_DIGEST_IMAGE))
+            selected = select_executor(ExecutionConfig(mode="auto", allow_unsafe_native=True))
             self.assertEqual(selected.mode, "native")
             with self.assertRaisesRegex(ExecutionUnavailable, "cannot provide"):
                 select_executor(ExecutionConfig(mode="auto"))
@@ -397,13 +403,14 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
         with patch("patchlab_commons.runner._find_container_runtime", return_value=("", "")):
             with self.assertRaisesRegex(ExecutionUnavailable, "no digest-pinned"):
                 select_executor(ExecutionConfig(mode="auto"))
-            selected = select_executor(
-                ExecutionConfig(mode="auto", allow_unsafe_native=True)
-            )
+            selected = select_executor(ExecutionConfig(mode="auto", allow_unsafe_native=True))
             self.assertEqual(selected.mode, "native")
 
     def test_container_mode_without_image_is_rejected_by_selector(self) -> None:
-        with patch("patchlab_commons.runner._find_container_runtime", return_value=("docker", "/bin/docker")):
+        with patch(
+            "patchlab_commons.runner._find_container_runtime",
+            return_value=("docker", "/bin/docker"),
+        ):
             with self.assertRaisesRegex(ExecutionUnavailable, "requires"):
                 select_executor(ExecutionConfig(mode="container"))
 

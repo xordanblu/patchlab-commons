@@ -2,14 +2,13 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 from patchlab_commons.engine import VerificationEngine, VerificationRequest
 from patchlab_commons.passport import verify_passport_bundle
-
 
 CONFIG = """
 [project]
@@ -63,8 +62,7 @@ def git(repo: Path, *args: str) -> str:
         cwd=repo,
         text=True,
         encoding="utf-8",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     if process.returncode != 0:
@@ -130,9 +128,7 @@ def main() -> int:
             raise RuntimeError(f"generated passport failed verification: {detail}")
 
         final_output = (
-            args.output.resolve()
-            if args.output
-            else (Path.cwd() / ".patchlab" / "demo").resolve()
+            args.output.resolve() if args.output else (Path.cwd() / ".patchlab" / "demo").resolve()
         )
         if final_output.exists():
             shutil.rmtree(final_output)

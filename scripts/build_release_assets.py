@@ -4,19 +4,19 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass
-from datetime import UTC, datetime
 import hashlib
 import os
-from pathlib import Path, PurePosixPath
 import shutil
 import stat
 import subprocess
 import tempfile
 import tomllib
-from typing import Literal, overload
 import unicodedata
 import zipfile
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
+from typing import Literal, overload
 
 _MAX_MEMBER_BYTES = 32 * 1024 * 1024
 _MAX_SOURCE_BYTES = 256 * 1024 * 1024
@@ -68,6 +68,8 @@ def _git_environment() -> dict[str, str]:
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_CONFIG_GLOBAL": os.devnull,
         "GIT_CONFIG_COUNT": "0",
+        "GIT_NO_REPLACE_OBJECTS": "1",
+        "GIT_NO_LAZY_FETCH": "1",
         "GIT_TERMINAL_PROMPT": "0",
         "GIT_PROTOCOL_FROM_USER": "0",
         "GIT_OPTIONAL_LOCKS": "0",
@@ -88,6 +90,7 @@ def git(root: Path, *args: str, binary: Literal[True]) -> bytes: ...
 def git(root: Path, *args: str, binary: bool = False) -> bytes | str:
     command = [
         _git_executable(root),
+        "--no-replace-objects",
         "--no-pager",
         "--literal-pathspecs",
         "-c",
@@ -108,8 +111,7 @@ def git(root: Path, *args: str, binary: bool = False) -> bytes | str:
             cwd=root,
             check=True,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             env=_git_environment(),
             timeout=_GIT_TIMEOUT_SECONDS,
             start_new_session=os.name != "nt",

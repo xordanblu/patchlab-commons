@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .models import Finding, Severity, VerificationReport
+from .models import Severity, VerificationReport
 
 
 def build_sarif(report: VerificationReport) -> dict[str, Any]:
@@ -56,7 +56,9 @@ def build_sarif(report: VerificationReport) -> dict[str, Any]:
                         "rules": [rules[key] for key in sorted(rules)],
                     }
                 },
-                "automationDetails": {"id": f"patchlab/{report.base_sha[:12]}..{report.head_sha[:12]}"},
+                "automationDetails": {
+                    "id": f"patchlab/{report.base_sha[:12]}..{report.head_sha[:12]}"
+                },
                 "results": results,
                 "properties": {
                     "outcome": report.outcome.value,

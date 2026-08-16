@@ -45,10 +45,14 @@ class InternalEdgeTests(unittest.TestCase):
 
     def test_module_entrypoint_calls_cli(self) -> None:
         output = io.StringIO()
-        with patch.object(sys, "argv", ["patchlab", "--version"]), patch(
-            "sys.stdout",
-            output,
-        ), self.assertRaises(SystemExit) as raised:
+        with (
+            patch.object(sys, "argv", ["patchlab", "--version"]),
+            patch(
+                "sys.stdout",
+                output,
+            ),
+            self.assertRaises(SystemExit) as raised,
+        ):
             runpy.run_module("patchlab_commons", run_name="__main__")
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("PatchLab Commons 0.2.0", output.getvalue())

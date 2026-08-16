@@ -5,7 +5,6 @@ import unittest
 from patchlab_commons.diffparse import FileDiff, align_file_diffs, parse_unified_diff
 from patchlab_commons.models import ChangedFile
 
-
 DIFF = """diff --git a/app.py b/app.py
 index 1111111..2222222 100644
 --- a/app.py

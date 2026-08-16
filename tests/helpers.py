@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 
 def git(repo: Path, *args: str) -> str:
@@ -10,8 +10,7 @@ def git(repo: Path, *args: str) -> str:
         cwd=repo,
         text=True,
         encoding="utf-8",
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         check=False,
     )
     if process.returncode != 0:

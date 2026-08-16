@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from patchlab_commons.config import ConfigError
@@ -30,9 +30,7 @@ class EngineExecutionTests(unittest.TestCase):
         )
         workspace = repo.parent.resolve()
         selected = ExecutorSelection(mode="static")
-        with patch(
-            "patchlab_commons.engine.select_executor", return_value=selected
-        ) as selector:
+        with patch("patchlab_commons.engine.select_executor", return_value=selected) as selector:
             VerificationEngine().verify(
                 VerificationRequest(
                     repo,

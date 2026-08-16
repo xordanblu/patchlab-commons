@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import contextlib
 import os
-from pathlib import Path, PurePosixPath
-import signal
 import shutil
+import signal
 import subprocess
 import tempfile
 import threading
 import unicodedata
-from dataclasses import dataclass, field as dataclass_field
-from typing import BinaryIO, Iterator
+from collections.abc import Iterator
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
+from pathlib import Path, PurePosixPath
+from typing import BinaryIO
 from urllib.parse import urlsplit, urlunsplit
 
 from .models import ChangedFile
@@ -20,6 +22,7 @@ _MAX_GIT_ERROR_BYTES = 1024 * 1024
 _MAX_SNAPSHOT_BYTES = 512 * 1024 * 1024
 _MAX_SNAPSHOT_MEMBER_BYTES = 128 * 1024 * 1024
 _MAX_SNAPSHOT_FILES = 100_000
+_MAX_GIT_METADATA_ENTRIES = 200_000
 _GIT_COMMAND_TIMEOUT_SECONDS = 120
 _GIT_TERMINATE_GRACE_SECONDS = 1.0
 
@@ -52,9 +55,7 @@ class _TreeEntry:
 
 
 class GitRepo:
-    def __init__(
-        self, path: str | Path, *, untrusted_root: str | Path | None = None
-    ) -> None:
+    def __init__(self, path: str | Path, *, untrusted_root: str | Path | None = None) -> None:
         requested = Path(path).resolve()
         self.untrusted_root = Path(untrusted_root or requested).resolve()
         try:
@@ -72,6 +73,63 @@ class GitRepo:
             raise GitError(
                 "resolved Git repository root is outside the requested trust boundary"
             ) from exc
+        self._validate_repository_metadata()
+
+    def _validate_repository_metadata(self) -> None:
+        """Reject Git metadata that can redirect object reads outside the boundary."""
+
+        git_dir = _resolve_git_metadata_path(
+            self.path,
+            self._run("rev-parse", "--absolute-git-dir").stdout,
+            "Git directory",
+        )
+        common_dir = _resolve_git_metadata_path(
+            self.path,
+            self._run("rev-parse", "--git-common-dir").stdout,
+            "Git common directory",
+        )
+        for label, directory in (("Git directory", git_dir), ("Git common directory", common_dir)):
+            _require_inside_boundary(directory, self.untrusted_root, label)
+            if not directory.is_dir():
+                raise GitError(f"{label} is not a directory: {directory}")
+
+        objects = common_dir / "objects"
+        if objects.is_symlink():
+            raise GitError("Git object database must not be a symbolic link")
+        try:
+            resolved_objects = objects.resolve(strict=True)
+        except FileNotFoundError as exc:
+            raise GitError(f"Git object database is missing: {objects}") from exc
+        _require_inside_boundary(
+            resolved_objects,
+            self.untrusted_root,
+            "Git object database",
+        )
+        if not resolved_objects.is_dir():
+            raise GitError(f"Git object database is not a directory: {resolved_objects}")
+        _reject_metadata_symlinks(resolved_objects, "Git object database")
+
+        for refs in {git_dir / "refs", common_dir / "refs"}:
+            if refs.exists() or refs.is_symlink():
+                _reject_metadata_symlinks(refs, "Git refs directory")
+        for metadata in {
+            git_dir / "HEAD",
+            git_dir / "config",
+            git_dir / "config.worktree",
+            git_dir / "commondir",
+            common_dir / "config",
+            common_dir / "packed-refs",
+            common_dir / "shallow",
+        }:
+            if metadata.is_symlink():
+                raise GitError(f"Git metadata must not be a symbolic link: {metadata.name}")
+
+        alternates = resolved_objects / "info" / "alternates"
+        if alternates.is_symlink() or alternates.exists():
+            raise GitError("Git alternate object databases are not allowed")
+        grafts = common_dir / "info" / "grafts"
+        if grafts.is_symlink() or grafts.exists():
+            raise GitError("Git graft metadata is not allowed")
 
     def _run(self, *args: str, check: bool = True) -> GitCommandResult:
         stdout, stderr, returncode = _run_git_bounded(
@@ -103,7 +161,9 @@ class GitRepo:
         return stdout
 
     def resolve(self, ref: str) -> str:
-        return self._run("rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}").stdout.strip()
+        return self._run(
+            "rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"
+        ).stdout.strip()
 
     def is_clean(self) -> bool:
         return not self._run("status", "--porcelain=v1").stdout.strip()
@@ -255,14 +315,10 @@ class GitRepo:
                 )
             )
             if len(entries) > _MAX_SNAPSHOT_FILES:
-                raise GitError(
-                    f"Git tree exceeded the {_MAX_SNAPSHOT_FILES}-file snapshot limit"
-                )
+                raise GitError(f"Git tree exceeded the {_MAX_SNAPSHOT_FILES}-file snapshot limit")
             total = sum(item.size for item in entries)
             if total > _MAX_SNAPSHOT_BYTES:
-                raise GitError(
-                    f"Git tree exceeded the {_MAX_SNAPSHOT_BYTES}-byte snapshot limit"
-                )
+                raise GitError(f"Git tree exceeded the {_MAX_SNAPSHOT_BYTES}-byte snapshot limit")
 
             ordinary = [item for item in entries if not item.symlink]
             links = [item for item in entries if item.symlink]
@@ -281,9 +337,7 @@ class GitRepo:
 
     def _read_blob(self, object_id: str, expected_size: int) -> bytes:
         if expected_size < 0 or expected_size > _MAX_SNAPSHOT_MEMBER_BYTES:
-            raise GitError(
-                f"Git blob exceeded the {_MAX_SNAPSHOT_MEMBER_BYTES}-byte member limit"
-            )
+            raise GitError(f"Git blob exceeded the {_MAX_SNAPSHOT_MEMBER_BYTES}-byte member limit")
         raw, stderr, returncode = _run_git_bounded(
             self.path,
             ("cat-file", "blob", object_id),
@@ -348,8 +402,8 @@ def _public_repository_identifier(remote: str) -> str:
     if "@" in remote and ":" in remote.rsplit("@", 1)[1]:
         host, path = remote.rsplit("@", 1)[1].split(":", 1)
         return f"{host}/{path}"
-    path = Path(remote.rstrip("/"))
-    return path.name or "repository"
+    remote_path = Path(remote.rstrip("/"))
+    return remote_path.name or "repository"
 
 
 def _git_executable(untrusted_root: Path) -> str:
@@ -369,11 +423,11 @@ def _git_executable(untrusted_root: Path) -> str:
     return os.fspath(resolved)
 
 
-def _git_command(
-    root: Path, *args: str, untrusted_root: Path | None = None
-) -> list[str]:
+def _git_command(root: Path, *args: str, untrusted_root: Path | None = None) -> list[str]:
     return [
         _git_executable(untrusted_root or root),
+        "--no-replace-objects",
+        "--literal-pathspecs",
         "-c",
         f"core.hooksPath={os.devnull}",
         "-c",
@@ -417,6 +471,8 @@ def _git_environment(home: Path | None = None) -> dict[str, str]:
             "GIT_CONFIG_NOSYSTEM": "1",
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_COUNT": "0",
+            "GIT_NO_REPLACE_OBJECTS": "1",
+            "GIT_NO_LAZY_FETCH": "1",
             "GIT_TERMINAL_PROMPT": "0",
             "GIT_PROTOCOL_FROM_USER": "0",
             "GIT_OPTIONAL_LOCKS": "0",
@@ -427,6 +483,52 @@ def _git_environment(home: Path | None = None) -> dict[str, str]:
         }
     )
     return environment
+
+
+def _resolve_git_metadata_path(root: Path, raw: str, label: str) -> Path:
+    value = raw.strip()
+    if not value or "\x00" in value:
+        raise GitError(f"{label} is invalid")
+    path = Path(value)
+    if not path.is_absolute():
+        path = root / path
+    if path.is_symlink():
+        raise GitError(f"{label} must not be a symbolic link")
+    return path.resolve()
+
+
+def _require_inside_boundary(path: Path, boundary: Path, label: str) -> None:
+    try:
+        path.relative_to(boundary.resolve())
+    except ValueError as exc:
+        raise GitError(f"{label} is outside the declared untrusted root") from exc
+
+
+def _reject_metadata_symlinks(root: Path, label: str) -> None:
+    if root.is_symlink():
+        raise GitError(f"{label} must not be a symbolic link")
+    if not root.is_dir():
+        raise GitError(f"{label} is not a directory: {root}")
+    pending = [root]
+    entries_seen = 0
+    while pending:
+        directory = pending.pop()
+        try:
+            with os.scandir(directory) as scanned:
+                entries = list(scanned)
+        except OSError as exc:
+            raise GitError(f"{label} could not be inspected: {directory}") from exc
+        entries_seen += len(entries)
+        if entries_seen > _MAX_GIT_METADATA_ENTRIES:
+            raise GitError(f"{label} exceeded the {_MAX_GIT_METADATA_ENTRIES}-entry safety limit")
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    raise GitError(f"{label} contains a symbolic link: {entry.name}")
+                if entry.is_dir(follow_symlinks=False):
+                    pending.append(Path(entry.path))
+            except OSError as exc:
+                raise GitError(f"{label} entry could not be inspected: {entry.name}") from exc
 
 
 def _parse_tree_entries(raw: bytes) -> list[_TreeEntry]:
@@ -618,11 +720,8 @@ def _run_git_bounded(
     if stdout_limit < 0 or stderr_limit < 0:
         raise ValueError("Git output limits must be non-negative")
     with tempfile.TemporaryDirectory(prefix="patchlab-git-home-") as home_raw:
-        popen_options: dict[str, object] = {}
-        if os.name == "nt":
-            popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            popen_options["start_new_session"] = True
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+        start_new_session = os.name != "nt"
         process = subprocess.Popen(
             _git_command(root, *args, untrusted_root=untrusted_root),
             cwd=root,
@@ -630,7 +729,8 @@ def _run_git_bounded(
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            **popen_options,
+            creationflags=creationflags,
+            start_new_session=start_new_session,
         )
         if process.stdout is None or process.stderr is None:
             process.kill()

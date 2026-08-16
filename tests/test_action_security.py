@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
+from pathlib import Path
 
 from tests.helpers import commit_all, init_repo
 

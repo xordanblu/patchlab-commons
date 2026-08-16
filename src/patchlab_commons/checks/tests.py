@@ -11,7 +11,9 @@ _SKIP_RE = re.compile(
     r"(@(?:unittest\.)?skip|pytest\.mark\.(?:skip|xfail)|"
     r"\b(?:describe|it|test)\.skip\b|\bxit\s*\(|\bxdescribe\s*\()"
 )
-_SUPPRESS_RE = re.compile(r"(?:\|\|\s*true|continue-on-error:\s*true|set\s*\+e|--passWithNoTests)", re.IGNORECASE)
+_SUPPRESS_RE = re.compile(
+    r"(?:\|\|\s*true|continue-on-error:\s*true|set\s*\+e|--passWithNoTests)", re.IGNORECASE
+)
 
 
 def check_test_integrity(context: CheckContext) -> list[Finding]:

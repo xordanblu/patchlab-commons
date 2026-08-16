@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import ast
-from pathlib import Path
 import re
 import sys
 import tomllib
+from pathlib import Path
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 MINIMUM_PUBLISHABLE_VERSION = (0, 2, 0)
@@ -49,7 +49,9 @@ def main() -> int:
     unique = set(versions.values())
     errors: list[str] = []
     if len(unique) != 1:
-        errors.append("version mismatch: " + ", ".join(f"{key}={value}" for key, value in versions.items()))
+        errors.append(
+            "version mismatch: " + ", ".join(f"{key}={value}" for key, value in versions.items())
+        )
     version = next(iter(unique)) if len(unique) == 1 else ""
     if version and not VERSION_RE.fullmatch(version):
         errors.append(f"version is not stable SemVer: {version}")

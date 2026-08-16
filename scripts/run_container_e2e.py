@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import subprocess
 import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from patchlab_commons.config import CommandConfig
@@ -43,8 +43,7 @@ def _container_names(runtime: Path, environment: dict[str, str]) -> set[str]:
         ],
         env=environment,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         timeout=20,
         check=False,
@@ -69,7 +68,7 @@ def main() -> int:
     secret_value = "must-not-enter-container"
     host_canary_literal = repr(os.fspath(host_canary))
     secret_name_literal = repr(secret_name)
-    code = rf'''
+    code = rf"""
 import os
 from pathlib import Path
 import socket
@@ -147,7 +146,7 @@ finally:
             child.kill()
 assert limited, "PID limit was not reached"
 print("container isolation checks passed")
-'''
+"""
     selected = ExecutorSelection(
         mode="container",
         runtime_name=runtime.name,

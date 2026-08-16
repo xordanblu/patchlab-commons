@@ -4,9 +4,9 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
 
 USES_RE = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)", re.MULTILINE)
 SHA_RE = re.compile(r"^[0-9a-f]{40}$")
@@ -46,7 +46,9 @@ def main() -> int:
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print(f"checked {len(iter_workflows(root))} workflow example(s); all external actions use full SHAs")
+    print(
+        f"checked {len(iter_workflows(root))} workflow example(s); all external actions use full SHAs"
+    )
     return 0
 
 

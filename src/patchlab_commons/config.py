@@ -242,16 +242,10 @@ def load_config_text(text: str, source: str = "<memory>") -> PatchLabConfig:
         container_runtime=container_runtime,
         container_image=container_image,
         network=_boolean(execution_data.get("network", False), "execution.network"),
-        memory_mb=_positive_int(
-            execution_data.get("memory_mb", 1024), "execution.memory_mb"
-        ),
+        memory_mb=_positive_int(execution_data.get("memory_mb", 1024), "execution.memory_mb"),
         cpus=_positive_number(execution_data.get("cpus", 1.0), "execution.cpus"),
-        pids_limit=_positive_int(
-            execution_data.get("pids_limit", 128), "execution.pids_limit"
-        ),
-        tmpfs_mb=_positive_int(
-            execution_data.get("tmpfs_mb", 64), "execution.tmpfs_mb"
-        ),
+        pids_limit=_positive_int(execution_data.get("pids_limit", 128), "execution.pids_limit"),
+        tmpfs_mb=_positive_int(execution_data.get("tmpfs_mb", 64), "execution.tmpfs_mb"),
         allow_unsafe_native=_boolean(
             execution_data.get("allow_unsafe_native", False),
             "execution.allow_unsafe_native",
@@ -435,7 +429,9 @@ def _environment_names(value: Any, field_name: str) -> tuple[str, ...]:
     names = _as_str_tuple(value, field_name)
     invalid = [name for name in names if not _ENV_NAME_RE.fullmatch(name)]
     if invalid:
-        raise ConfigError(f"{field_name} contains an invalid environment variable name: {invalid[0]!r}")
+        raise ConfigError(
+            f"{field_name} contains an invalid environment variable name: {invalid[0]!r}"
+        )
     if len(names) != len(set(names)):
         raise ConfigError(f"{field_name} must not contain duplicate names")
     sensitive = [name for name in names if _SENSITIVE_ENV_NAME_RE.search(name)]

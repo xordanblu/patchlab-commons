@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from contextlib import ExitStack
-from dataclasses import dataclass, replace
-from datetime import datetime, timezone
 import hashlib
 import os
-from pathlib import Path, PurePosixPath
 import platform
 import sys
+from contextlib import ExitStack
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from ._version import __version__
@@ -110,8 +110,7 @@ class VerificationEngine:
                     severity=Severity.ERROR,
                     disposition=Disposition.DENY,
                     evidence=(
-                        f"changed_files={len(changed_files)}, "
-                        f"parsed_file_diffs={len(parsed_diffs)}"
+                        f"changed_files={len(changed_files)}, parsed_file_diffs={len(parsed_diffs)}"
                     ),
                     recommendation=(
                         "Re-run with a standard Git diff. Review binary, submodule, rename, "
@@ -205,12 +204,7 @@ class VerificationEngine:
             "blocking_findings": sum(1 for item in findings if item.blocking),
             "review_findings": sum(1 for item in findings if item.requires_review),
         }
-        generated_at = (
-            datetime.now(timezone.utc)
-            .replace(microsecond=0)
-            .isoformat()
-            .replace("+00:00", "Z")
-        )
+        generated_at = datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
         report = VerificationReport(
             schema_version="1.1.0",
             tool_version=__version__,
@@ -233,7 +227,9 @@ class VerificationEngine:
                 "head_commit": _public_commit_metadata(repo.commit_metadata(head_sha)),
                 "human_review_required": config.policy.require_human_review,
                 "fail_on_review": effective_fail_on_review,
-                "environment": "github-actions" if os.environ.get("GITHUB_ACTIONS") == "true" else "local",
+                "environment": "github-actions"
+                if os.environ.get("GITHUB_ACTIONS") == "true"
+                else "local",
                 "config_source": request.config_source,
                 "config_location": config_location,
                 "config_sha256": config_digest,
@@ -392,11 +388,16 @@ def _effective_execution(
 ) -> ExecutionConfig:
     updates: dict[str, Any] = {}
     if request.execution_mode is not None and request.execution_mode not in {
-        "auto", "static", "container", "native"
+        "auto",
+        "static",
+        "container",
+        "native",
     }:
         raise ConfigError("execution mode override is invalid")
     if request.container_runtime is not None and request.container_runtime not in {
-        "auto", "docker", "podman"
+        "auto",
+        "docker",
+        "podman",
     }:
         raise ConfigError("container runtime override is invalid")
     if request.network is not None and not isinstance(request.network, bool):
@@ -423,7 +424,6 @@ def _effective_execution(
     return replace(configured, **updates)
 
 
-
 def _load_config(
     repo: GitRepo,
     config_path: Path,
@@ -447,10 +447,14 @@ def _load_config(
     if relative is None:
         raise ConfigError("a base or head configuration path must be relative to the repository")
     ref = base_sha if source == "base" else head_sha
-    text = repo.utf8_file_at(ref, relative)
-    if text is None:
+    config_text = repo.utf8_file_at(ref, relative)
+    if config_text is None:
         raise ConfigError(f"configuration file not found at {source}:{relative}")
-    return load_config_text(text, source=f"{source}:{relative}"), text, f"{source}:{relative}"
+    return (
+        load_config_text(config_text, source=f"{source}:{relative}"),
+        config_text,
+        f"{source}:{relative}",
+    )
 
 
 def _relative_config_path(path: Path) -> str | None:

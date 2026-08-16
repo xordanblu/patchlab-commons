@@ -53,11 +53,17 @@ class HostedWorkflowContractTests(unittest.TestCase):
 
     def test_historical_tag_cannot_pass_release_floor(self) -> None:
         text = self._read(".github/workflows/release.yml")
+        self.assertIn("if: ${{ github.ref_name != 'v0.1.0' }}", text)
         self.assertIn('python -I scripts/check_release.py --tag "$GITHUB_REF_NAME"', text)
         self.assertIn(
-            "test \"$(git rev-parse 'v0.1.0^{commit}')\" = \"7b61eb318f894dbb5f496a77ed3fea669d6707b8\"",
+            'test "$(git rev-parse \'v0.1.0^{commit}\')" = "7b61eb318f894dbb5f496a77ed3fea669d6707b8"',
             text,
         )
+
+    def test_final_release_is_not_marked_as_a_prerelease(self) -> None:
+        text = self._read(".github/workflows/release.yml")
+        self.assertIn("name: Publish GitHub release", text)
+        self.assertNotIn("--prerelease", text)
 
 
 if __name__ == "__main__":

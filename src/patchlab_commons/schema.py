@@ -85,9 +85,7 @@ def report_schema() -> dict[str, Any]:
                         "items": {"type": "string"},
                     },
                     "required": {"type": "boolean"},
-                    "expected_exit": {
-                        "enum": ["zero", "nonzero", "base_nonzero_head_zero"]
-                    },
+                    "expected_exit": {"enum": ["zero", "nonzero", "base_nonzero_head_zero"]},
                     "exit_code": nullable_integer,
                     "passed": {"type": "boolean"},
                     "timed_out": {"type": "boolean"},
@@ -300,9 +298,7 @@ def passport_schema() -> dict[str, Any]:
                     "outcome": {"enum": ["pass", "needs_review", "fail"]},
                     "generated_at": {"type": "string", "format": "date-time"},
                     "tool_version": {"type": "string", "minLength": 1},
-                    "config_source": {
-                        "enum": ["base", "head", "working-tree"]
-                    },
+                    "config_source": {"enum": ["base", "head", "working-tree"]},
                     "config_sha256": {"$ref": "#/$defs/sha256"},
                     "execution_mode": {"enum": ["static", "native", "container"]},
                     "execution_boundary": {

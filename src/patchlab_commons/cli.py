@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import json
-from pathlib import Path
 import sys
+from pathlib import Path
 
 from ._version import __version__
-from .config import ConfigError, DEFAULT_CONFIG
+from .config import DEFAULT_CONFIG, ConfigError
 from .doctor import run_doctor
 from .engine import VerificationEngine, VerificationRequest
 from .gitutils import GitError
@@ -64,12 +63,16 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"PatchLab Commons {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    init = subparsers.add_parser("init", help="create patchlab.toml and an optional GitHub workflow")
+    init = subparsers.add_parser(
+        "init", help="create patchlab.toml and an optional GitHub workflow"
+    )
     init.add_argument("--directory", type=Path, default=Path.cwd())
     init.add_argument("--github", action=argparse.BooleanOptionalAction, default=True)
     init.add_argument("--force", action="store_true")
 
-    verify = subparsers.add_parser("verify", help="compare two Git refs and create a Patch Passport")
+    verify = subparsers.add_parser(
+        "verify", help="compare two Git refs and create a Patch Passport"
+    )
     verify.add_argument("--repo", type=Path, default=Path.cwd())
     verify.add_argument("--config", type=Path, default=Path("patchlab.toml"))
     verify.add_argument(
@@ -201,7 +204,9 @@ def _verify(args: argparse.Namespace) -> int:
     print(f"PatchLab outcome: {report.outcome.value}")
     print(f"Changed files: {report.summary['changed_files']}")
     print(f"Commands: {report.summary['commands_passed']}/{report.summary['commands']} passed")
-    print(f"Findings: {report.summary['findings']} ({report.summary['blocking_findings']} blocking)")
+    print(
+        f"Findings: {report.summary['findings']} ({report.summary['blocking_findings']} blocking)"
+    )
     print(f"Passport: {result.artifacts['bundle']}")
     print(f"SHA-256: {result.artifacts['bundle_sha256']}")
     if report.outcome is Outcome.FAIL:

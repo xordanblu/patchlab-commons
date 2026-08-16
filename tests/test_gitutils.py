@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import os
 import tempfile
-from pathlib import Path
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from patchlab_commons.gitutils import GitError, GitRepo, _public_repository_identifier
-
 from tests.helpers import commit_all, git, init_repo
 
 
@@ -133,7 +132,9 @@ class GitUtilsTests(unittest.TestCase):
                 adapter.utf8_file_at(sha, "invalid.toml")
 
     def test_repository_identifier_tolerates_invalid_port(self) -> None:
-        value = _public_repository_identifier("https://user:secret@example.com:notaport/project.git")
+        value = _public_repository_identifier(
+            "https://user:secret@example.com:notaport/project.git"
+        )
         self.assertEqual(value, "https://example.com/project.git")
 
     def test_worktree_add_does_not_execute_repository_hooks(self) -> None:
@@ -162,7 +163,9 @@ class GitUtilsTests(unittest.TestCase):
             init_repo(repo)
             marker = Path(temp) / "textconv-ran"
             converter = Path(temp) / "convert.sh"
-            converter.write_text(f"#!/bin/sh\nprintf ran > '{marker}'\ncat \"$1\"\n", encoding="utf-8")
+            converter.write_text(
+                f"#!/bin/sh\nprintf ran > '{marker}'\ncat \"$1\"\n", encoding="utf-8"
+            )
             converter.chmod(0o755)
             git(repo, "config", "diff.patchlab-test.textconv", str(converter))
             (repo / ".gitattributes").write_text("*.demo diff=patchlab-test\n", encoding="utf-8")

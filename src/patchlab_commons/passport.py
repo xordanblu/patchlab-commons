@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import contextlib
 import gzip
-import io
 import hashlib
+import io
 import json
-from datetime import datetime
-from pathlib import Path
 import re
 import shutil
 import tarfile
 import tempfile
-from typing import Any, Iterator
+from collections.abc import Iterator
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from .config import is_pinned_container_image
 from .reporting import pretty_json
@@ -221,15 +222,20 @@ def _valid_identity(value: Any, schema_version: str) -> bool:
         "tool_version",
     )
     if any(
-        not isinstance(value.get(field), str) or not value[field].strip()
-        for field in string_fields
+        not isinstance(value.get(field), str) or not value[field].strip() for field in string_fields
     ):
         return False
     if not _valid_timestamp(value["generated_at"]):
         return False
-    if not isinstance(value.get("base_sha"), str) or _GIT_SHA_RE.fullmatch(value["base_sha"]) is None:
+    if (
+        not isinstance(value.get("base_sha"), str)
+        or _GIT_SHA_RE.fullmatch(value["base_sha"]) is None
+    ):
         return False
-    if not isinstance(value.get("head_sha"), str) or _GIT_SHA_RE.fullmatch(value["head_sha"]) is None:
+    if (
+        not isinstance(value.get("head_sha"), str)
+        or _GIT_SHA_RE.fullmatch(value["head_sha"]) is None
+    ):
         return False
     if value.get("outcome") not in {"pass", "needs_review", "fail"}:
         return False

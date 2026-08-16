@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
 import io
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from pathlib import Path
 
 from patchlab_commons.cli import main
 from patchlab_commons.passport import create_passport_bundle
-
 from tests.helpers import commit_all, init_repo
 
 
@@ -135,7 +134,7 @@ class CliTests(unittest.TestCase):
         with redirect_stdout(output):
             code = main(["schema"])
         self.assertEqual(code, 0)
-        self.assertIn('PatchLab Patch Passport Report', output.getvalue())
+        self.assertIn("PatchLab Patch Passport Report", output.getvalue())
 
     def test_passport_schema_prints_to_stdout(self) -> None:
         output = io.StringIO()
@@ -152,8 +151,12 @@ class CliTests(unittest.TestCase):
     def test_init_workflow_uses_published_action_without_installing_target(self) -> None:
         directory = Path(tempfile.mkdtemp())
         self.assertEqual(main(["init", "--directory", str(directory)]), 0)
-        workflow = (directory / ".github" / "workflows" / "patchlab.yml").read_text(encoding="utf-8")
-        self.assertIn("uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5", workflow)
+        workflow = (directory / ".github" / "workflows" / "patchlab.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5", workflow
+        )
         self.assertIn("config-source: base", workflow)
         self.assertNotIn("pip install -e .", workflow)
         self.assertIn("persist-credentials: false", workflow)

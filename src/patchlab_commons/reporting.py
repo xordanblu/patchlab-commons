@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Any
 
 from .models import Outcome, VerificationReport
-from .sarif import build_sarif
 from .safeio import ensure_output_directory, safe_write_text
+from .sarif import build_sarif
 
 
 def pretty_json(data: Any) -> str:
@@ -67,19 +67,19 @@ def render_markdown(report: VerificationReport) -> str:
                 "|---|---|---|---:|---|---:|",
             ]
         )
-        for item in report.command_results:
-            result = "PASS" if item.passed else "FAIL"
-            if item.timed_out:
+        for command in report.command_results:
+            result = "PASS" if command.passed else "FAIL"
+            if command.timed_out:
                 exit_value = "timeout"
-            elif item.exit_code is None:
+            elif command.exit_code is None:
                 exit_value = "not started"
             else:
-                exit_value = str(item.exit_code)
+                exit_value = str(command.exit_code)
             lines.append(
                 "| "
-                f"{_code(item.name)} | {_code(item.phase)} | "
-                f"{_code(item.expected_exit)} | {_text(exit_value)} | "
-                f"**{result}** | {item.duration_seconds:.3f}s |"
+                f"{_code(command.name)} | {_code(command.phase)} | "
+                f"{_code(command.expected_exit)} | {_text(exit_value)} | "
+                f"**{result}** | {command.duration_seconds:.3f}s |"
             )
     lines.extend(["", "## Policy findings", ""])
     if not report.findings:
@@ -105,19 +105,19 @@ def render_markdown(report: VerificationReport) -> str:
         lines.append("No changed files.")
     else:
         lines.extend(["| Status | File | Added | Deleted |", "|---|---|---:|---:|"])
-        for item in report.changed_files:
+        for changed in report.changed_files:
             added = (
                 "binary"
-                if item.binary
-                else str(item.added_lines if item.added_lines is not None else "?")
+                if changed.binary
+                else str(changed.added_lines if changed.added_lines is not None else "?")
             )
             deleted = (
                 "binary"
-                if item.binary
-                else str(item.deleted_lines if item.deleted_lines is not None else "?")
+                if changed.binary
+                else str(changed.deleted_lines if changed.deleted_lines is not None else "?")
             )
             lines.append(
-                f"| {_code(item.status)} | {_code(item.path)} | "
+                f"| {_code(changed.status)} | {_code(changed.path)} | "
                 f"{_text(added)} | {_text(deleted)} |"
             )
     lines.extend(

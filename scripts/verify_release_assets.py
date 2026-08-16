@@ -6,19 +6,17 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-from pathlib import Path, PurePosixPath
 import re
 import stat
 import sys
 import unicodedata
 import zipfile
+from pathlib import Path, PurePosixPath
 
 _SHA256_LINE = re.compile(r"^([0-9a-f]{64})  ([A-Za-z0-9][A-Za-z0-9._-]*)$")
 _VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 _COMMIT = re.compile(r"^[0-9a-f]{40}$")
-_NAMESPACE = re.compile(
-    r"^https://github\.com/xordanblu/patchlab-commons/spdx/[0-9a-f]{64}$"
-)
+_NAMESPACE = re.compile(r"^https://github\.com/xordanblu/patchlab-commons/spdx/[0-9a-f]{64}$")
 _MAX_SOURCE_ARCHIVE_BYTES = 64 * 1024 * 1024
 _MAX_SOURCE_MEMBERS = 4096
 _MAX_SOURCE_MEMBER_BYTES = 32 * 1024 * 1024
@@ -99,9 +97,7 @@ def _validate_symlink_target(path: PurePosixPath, target: bytes) -> None:
             depth += 1
 
 
-def _read_member_bounded(
-    archive: zipfile.ZipFile, member: zipfile.ZipInfo, maximum: int
-) -> bytes:
+def _read_member_bounded(archive: zipfile.ZipFile, member: zipfile.ZipInfo, maximum: int) -> bytes:
     collected = bytearray()
     with archive.open(member, "r") as handle:
         while True:
@@ -152,7 +148,9 @@ def _verify_source_zip(path: Path, version: str) -> list[str]:
                 seen.add(member.filename)
                 portable_seen.add(portable_key)
                 if member.extra or member.comment:
-                    errors.append(f"source ZIP member contains nondeterministic metadata: {member.filename}")
+                    errors.append(
+                        f"source ZIP member contains nondeterministic metadata: {member.filename}"
+                    )
                 if timestamp is None:
                     timestamp = member.date_time
                 elif member.date_time != timestamp:
@@ -166,7 +164,9 @@ def _verify_source_zip(path: Path, version: str) -> list[str]:
                 if member.create_system != 3:
                     errors.append(f"source ZIP member lacks Unix mode metadata: {member.filename}")
                 if member.is_dir():
-                    errors.append(f"source ZIP contains an unexpected directory entry: {member.filename}")
+                    errors.append(
+                        f"source ZIP contains an unexpected directory entry: {member.filename}"
+                    )
                     continue
                 if member.file_size < 0 or member.file_size > _MAX_SOURCE_MEMBER_BYTES:
                     errors.append(f"source ZIP member exceeds size limit: {member.filename}")
@@ -178,13 +178,17 @@ def _verify_source_zip(path: Path, version: str) -> list[str]:
                 mode = (member.external_attr >> 16) & 0xFFFF
                 file_type = stat.S_IFMT(mode)
                 if file_type not in {stat.S_IFREG, stat.S_IFLNK}:
-                    errors.append(f"source ZIP contains an unsupported member type: {member.filename}")
+                    errors.append(
+                        f"source ZIP contains an unsupported member type: {member.filename}"
+                    )
                     continue
                 permissions = stat.S_IMODE(mode)
                 if file_type == stat.S_IFREG and permissions not in {0o644, 0o755}:
                     errors.append(f"source ZIP contains unsafe file permissions: {member.filename}")
                 if file_type == stat.S_IFLNK and permissions != 0o777:
-                    errors.append(f"source ZIP contains invalid symlink permissions: {member.filename}")
+                    errors.append(
+                        f"source ZIP contains invalid symlink permissions: {member.filename}"
+                    )
                 if file_type == stat.S_IFLNK:
                     try:
                         target = _read_member_bounded(archive, member, 4096)
@@ -259,9 +263,11 @@ def _verify_sbom(path: Path, version: str, expected_commit: str | None) -> list[
     if expected_vcs is not None:
         if vcs != expected_vcs:
             errors.append("SBOM VCS reference does not match the release commit")
-    elif not isinstance(vcs, str) or re.fullmatch(
-        r"git\+https://github\.com/xordanblu/patchlab-commons@[0-9a-f]{40}", vcs
-    ) is None:
+    elif (
+        not isinstance(vcs, str)
+        or re.fullmatch(r"git\+https://github\.com/xordanblu/patchlab-commons@[0-9a-f]{40}", vcs)
+        is None
+    ):
         errors.append("SBOM VCS reference is invalid")
     relationships = document.get("relationships")
     expected_relationship = {

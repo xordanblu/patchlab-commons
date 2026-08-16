@@ -10,7 +10,8 @@ PatchLab Commons v0.2.0 is an Alpha security-hardening release.
 - Blocks network access by default.
 - Applies non-root execution, a read-only root, a read-only source snapshot, removed capabilities, `no-new-privileges`, and CPU, memory, PID, time, output, and temporary-space limits.
 - Replaces Git worktrees and `git archive` for command snapshots with direct Git object materialization.
-- Uses a minimal Git environment, hard Git time limits, strict UTF-8 policy loading, and trusted Git executable resolution.
+- Uses a minimal Git environment, disables replacement objects and lazy object fetches, and rejects grafts, alternate object stores, symlinked metadata, and metadata outside the repository boundary.
+- Applies hard Git time limits, strict UTF-8 policy loading, and trusted Git executable resolution.
 - Hardens the composite GitHub Action against local Python module replacement.
 - Treats the complete caller `GITHUB_WORKSPACE` as untrusted for Python, Git, Docker, and Podman executable resolution.
 - Rejects candidate-controlled Git, Docker, Podman, and native executable resolution.
@@ -20,6 +21,7 @@ PatchLab Commons v0.2.0 is an Alpha security-hardening release.
 - Adds Python 3.14 to the supported test matrix.
 - Adds hosted E2E designs for module-hijack resistance and real Linux container isolation.
 - Adds reproducible build checks, SBOM generation, GitHub artifact attestations, an explicit post-release verification dispatch, and optional PyPI Trusted Publishing.
+- Publishes `v0.2.0` as a stable GitHub release while ignoring the historical `v0.1.0` tag in release automation.
 
 ## Compatibility
 

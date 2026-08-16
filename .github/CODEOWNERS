@@ -7,6 +7,7 @@
 /action.yml @xordanblu
 /AGENTS.md @xordanblu
 /requirements-*.txt @xordanblu
+/setup.py @xordanblu
 /src/patchlab_commons/config.py @xordanblu
 /src/patchlab_commons/engine.py @xordanblu
 /src/patchlab_commons/gitutils.py @xordanblu
@@ -17,6 +18,7 @@
 /scripts/check_action_pins.py @xordanblu
 /scripts/check_release.py @xordanblu
 /scripts/generate_sbom.py @xordanblu
+/scripts/reproducible_sdist.py @xordanblu
 /docs/THREAT_MODEL.md @xordanblu
 /docs/RELEASING.md @xordanblu
 /SECURITY.md @xordanblu

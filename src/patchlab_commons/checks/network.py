@@ -30,7 +30,10 @@ _SOURCE_SUFFIXES = {
 }
 _NETWORK_PATTERNS = [
     (re.compile(r"\brequests\.(?:get|post|put|patch|delete|request)\s*\("), "Python requests call"),
-    (re.compile(r"\bhttpx\.(?:get|post|put|patch|delete|request|Client|AsyncClient)\b"), "Python httpx use"),
+    (
+        re.compile(r"\bhttpx\.(?:get|post|put|patch|delete|request|Client|AsyncClient)\b"),
+        "Python httpx use",
+    ),
     (re.compile(r"\burllib\.request\b"), "Python urllib network use"),
     (re.compile(r"\b(?:fetch|axios\.(?:get|post|put|patch|delete))\s*\("), "JavaScript HTTP call"),
     (re.compile(r"\bnet/http\b"), "Go net/http use"),

@@ -125,7 +125,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH
           python -I -m build --outdir dist-one
           rm -rf build src/*.egg-info
           python -I -m build --outdir dist-two
@@ -155,7 +156,8 @@ jobs:
       - name: Generate deterministic SBOM
         shell: bash
         run: |
-          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH
           python scripts/generate_sbom.py --output dist-one/patchlab-commons.spdx.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

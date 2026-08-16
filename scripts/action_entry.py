@@ -9,9 +9,9 @@ imports code from the caller workspace during bootstrap.
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import sys
 import uuid
+from pathlib import Path
 
 _ACTION_ROOT = Path(__file__).resolve().parents[1]
 _SOURCE_ROOT = (_ACTION_ROOT / "src").resolve()
@@ -19,7 +19,9 @@ _SOURCE_ROOT = (_ACTION_ROOT / "src").resolve()
 
 def _bootstrap() -> None:
     if not sys.flags.isolated or not sys.flags.safe_path or not sys.flags.no_site:
-        raise RuntimeError("the GitHub Action entry point requires Python isolated no-site mode (-I -S)")
+        raise RuntimeError(
+            "the GitHub Action entry point requires Python isolated no-site mode (-I -S)"
+        )
     if not (_SOURCE_ROOT / "patchlab_commons" / "__init__.py").is_file():
         raise RuntimeError("trusted PatchLab source tree is incomplete")
     sys.path.insert(0, os.fspath(_SOURCE_ROOT))
@@ -30,10 +32,10 @@ def _bootstrap() -> None:
 
 _bootstrap()
 
+import patchlab_commons as _trusted_package  # noqa: E402
 from patchlab_commons.engine import VerificationEngine, VerificationRequest  # noqa: E402
 from patchlab_commons.models import Outcome  # noqa: E402
 from patchlab_commons.passport import sha256_file, verify_passport_bundle  # noqa: E402
-import patchlab_commons as _trusted_package  # noqa: E402
 
 if not Path(_trusted_package.__file__).resolve().is_relative_to(_SOURCE_ROOT):
     raise RuntimeError("PatchLab was not imported from the trusted action source tree")
@@ -114,9 +116,7 @@ def _write_summary(result: object, digest: str) -> None:
         handle.write(f"- Findings: `{report.summary['findings']}`\n")
         handle.write(f"- Blocking findings: `{report.summary['blocking_findings']}`\n")
         handle.write(f"- Bundle SHA-256: `{digest}`\n")
-        handle.write(
-            f"- Execution boundary: `{report.metadata['execution_boundary']}`\n"
-        )
+        handle.write(f"- Execution boundary: `{report.metadata['execution_boundary']}`\n")
 
 
 def main() -> int:
@@ -142,9 +142,7 @@ def main() -> int:
             "uses: ./ is not safe for untrusted pull requests"
         )
 
-    config_source = _choice(
-        "PATCHLAB_CONFIG_SOURCE", {"base", "head", "working-tree"}, "base"
-    )
+    config_source = _choice("PATCHLAB_CONFIG_SOURCE", {"base", "head", "working-tree"}, "base")
     config_input = Path(os.environ.get("PATCHLAB_CONFIG", "patchlab.toml"))
     if config_source == "working-tree":
         config_path = _inside(
@@ -162,12 +160,8 @@ def main() -> int:
         output_input if output_input.is_absolute() else repository / output_input,
         "output directory",
     )
-    execution_mode = _choice(
-        "PATCHLAB_EXECUTION_MODE", {"auto", "static", "container"}, "static"
-    )
-    container_runtime = _choice(
-        "PATCHLAB_CONTAINER_RUNTIME", {"auto", "docker", "podman"}, "auto"
-    )
+    execution_mode = _choice("PATCHLAB_EXECUTION_MODE", {"auto", "static", "container"}, "static")
+    container_runtime = _choice("PATCHLAB_CONTAINER_RUNTIME", {"auto", "docker", "podman"}, "auto")
     if execution_mode == "container" and os.name == "nt":
         raise RuntimeError("container execution is supported only on Linux hosts")
 
@@ -225,4 +219,4 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except (OSError, RuntimeError, ValueError) as exc:
         print(f"patchlab-action: {exc}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc

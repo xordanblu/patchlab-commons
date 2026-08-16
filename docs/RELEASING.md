@@ -60,7 +60,7 @@ pip-audit --requirement requirements-runtime.txt
 7. It installs both packages in clean environments.
 8. It creates the source ZIP, full Git bundle, SBOM, demonstration passports, and SHA-256 list.
 9. GitHub creates artifact attestations with OIDC.
-10. GitHub creates a prerelease from the existing immutable tag.
+10. GitHub creates a stable release from the existing immutable tag.
 11. The `Release verification` workflow downloads the assets from GitHub.
 12. It requires the exact nine-file asset set and validates `SHA256SUMS.txt`.
 13. It verifies every GitHub artifact attestation.

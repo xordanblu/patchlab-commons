@@ -1,24 +1,25 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import stat
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from patchlab_commons.gitutils import (
     GitError,
     GitRepo,
     _decode_path,
-    _git_executable,
     _git_environment,
+    _git_executable,
     _parse_tree_entries,
     _run_git_bounded,
     _validate_link_target,
     _validate_snapshot_path,
 )
 from tests.helpers import commit_all, init_repo
+from tests.helpers import git as run_git
 
 
 class GitSecurityTests(unittest.TestCase):
@@ -64,6 +65,53 @@ class GitSecurityTests(unittest.TestCase):
             adapter = GitRepo(repo)
             self.assertEqual(adapter.resolve(sha), sha)
             self.assertEqual(adapter.file_at(sha, "file.txt"), "safe\n")
+
+    def test_git_replace_refs_cannot_substitute_selected_commit_objects(self) -> None:
+        repo = Path(tempfile.mkdtemp()) / "repo"
+        init_repo(repo)
+        (repo / "file.txt").write_text("safe\n", encoding="utf-8")
+        safe_sha = commit_all(repo, "safe")
+        (repo / "file.txt").write_text("replacement\n", encoding="utf-8")
+        replacement_sha = commit_all(repo, "replacement")
+        run_git(repo, "replace", safe_sha, replacement_sha)
+
+        adapter = GitRepo(repo)
+        self.assertEqual(adapter.resolve(safe_sha), safe_sha)
+        self.assertEqual(adapter.file_at(safe_sha, "file.txt"), "safe\n")
+        with adapter.snapshot(safe_sha, "no-replace") as snapshot:
+            self.assertEqual((snapshot / "file.txt").read_text(encoding="utf-8"), "safe\n")
+
+    def test_alternate_object_database_outside_boundary_is_rejected(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        external = root / "external"
+        victim = root / "victim"
+        init_repo(external)
+        (external / "external.txt").write_text("outside\n", encoding="utf-8")
+        external_sha = commit_all(external, "external")
+        init_repo(victim)
+        alternates = victim / ".git" / "objects" / "info" / "alternates"
+        alternates.write_text(str(external / ".git" / "objects") + "\n", encoding="utf-8")
+        run_git(victim, "update-ref", "refs/heads/main", external_sha)
+
+        with self.assertRaisesRegex(GitError, "alternate object databases"):
+            GitRepo(victim)
+
+    @unittest.skipIf(os.name == "nt", "symbolic-link creation requires POSIX semantics")
+    def test_symlinked_loose_object_outside_boundary_is_rejected(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        repo = root / "repo"
+        init_repo(repo)
+        (repo / "file.txt").write_text("safe\n", encoding="utf-8")
+        commit_all(repo, "safe")
+        object_id = run_git(repo, "rev-parse", "HEAD:file.txt")
+        loose_object = repo / ".git" / "objects" / object_id[:2] / object_id[2:]
+        outside = root / "outside-object"
+        outside.write_bytes(loose_object.read_bytes())
+        loose_object.unlink()
+        loose_object.symlink_to(outside)
+
+        with self.assertRaisesRegex(GitError, "contains a symbolic link"):
+            GitRepo(repo)
 
     def test_ref_that_looks_like_an_option_is_not_interpreted_as_one(self) -> None:
         repo = Path(tempfile.mkdtemp()) / "repo"

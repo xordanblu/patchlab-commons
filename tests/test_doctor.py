@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from patchlab_commons.doctor import run_doctor
 from tests.helpers import commit_all, init_repo

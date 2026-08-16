@@ -65,6 +65,7 @@ A contributor can attempt to:
 - add `pip`, `patchlab_commons`, `sitecustomize`, `usercustomize`, or standard-library lookalikes;
 - change `PYTHONPATH`, `PYTHONHOME`, or user-site behavior;
 - set hostile Git process variables;
+- install replacement refs, grafts, or alternate object stores;
 - add hooks, filters, attributes, symlinks, gitlinks, large files, odd paths, and `export-ignore` rules;
 - create unlimited output or descendant processes;
 - use the network;
@@ -79,7 +80,7 @@ A contributor can attempt to:
 1. The trusted base policy determines the decision unless the maintainer explicitly selects another source.
 2. Base and head resolve to exact commit object IDs.
 3. Candidate files cannot change the Python code imported by the action bootstrap.
-4. Candidate Git settings cannot redirect Git operations.
+4. Candidate Git settings, replacement refs, grafts, and alternate object stores cannot redirect Git operations or object lookup.
 5. Dynamic code never runs natively without explicit consent.
 6. Container mode never degrades silently to native mode.
 7. Network is disabled unless trusted policy enables it.
@@ -97,6 +98,7 @@ A contributor can attempt to:
 |---|---|---|
 | Python module replacement | isolated/no-site action entry and trusted source path | a malicious caller workflow can remove the action entirely |
 | Git environment injection | minimal environment and fixed `git -c` controls | a compromised Git binary remains trusted |
+| Git object substitution | replacement objects disabled; grafts, alternates, symlinked metadata, and out-of-bound metadata rejected | the repository's own reachable object database remains untrusted input |
 | checkout/export filters | direct tree and blob materialization | unsupported gitlinks are rejected, not executed |
 | host file access | isolated container with minimal read-only mount | containers share the host kernel |
 | network exfiltration | `--network none` by default | explicit network mode weakens reproducibility and needs review |

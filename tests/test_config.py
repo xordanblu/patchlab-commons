@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
-from patchlab_commons.config import ConfigError, DEFAULT_CONFIG, load_config
+from patchlab_commons.config import DEFAULT_CONFIG, ConfigError, load_config
 from patchlab_commons.models import Disposition
 
 

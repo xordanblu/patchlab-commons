@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 
 from .models import ChangedFile
-
 
 _HUNK_RE = re.compile(r"^@@ -(?P<old>\d+)(?:,\d+)? \+(?P<new>\d+)(?:,\d+)? @@")
 
@@ -32,7 +31,6 @@ class FileDiff:
 
     def deletions(self) -> list[DiffLine]:
         return [line for line in self.lines if line.kind == "-"]
-
 
 
 def align_file_diffs(files: list[FileDiff], changed_files: list[ChangedFile]) -> list[FileDiff]:

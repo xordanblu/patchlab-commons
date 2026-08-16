@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import gzip
 import hashlib
+import io
 import json
-from pathlib import Path
 import stat
+import tarfile
 import tempfile
 import unittest
-from unittest.mock import patch
 import zipfile
+from pathlib import Path
+from unittest.mock import patch
 
-from scripts import build_release_assets, generate_sbom
+from scripts import build_release_assets, generate_sbom, reproducible_sdist
 from scripts.verify_release_assets import expected_assets, verify
 
 
@@ -39,9 +42,7 @@ class ReleaseAssetTests(unittest.TestCase):
             "spdxVersion": "SPDX-2.3",
             "dataLicense": "CC0-1.0",
             "name": f"patchlab-commons-{version}",
-            "documentNamespace": (
-                "https://github.com/xordanblu/patchlab-commons/spdx/" + "a" * 64
-            ),
+            "documentNamespace": ("https://github.com/xordanblu/patchlab-commons/spdx/" + "a" * 64),
             "documentDescribes": [package_spdx],
             "packages": [
                 {
@@ -127,9 +128,7 @@ class ReleaseAssetTests(unittest.TestCase):
         self.assertIn("SBOM VCS reference does not match", "\n".join(errors))
         document = json.loads((root / "patchlab-commons.spdx.json").read_text(encoding="utf-8"))
         document["packages"][0]["name"] = "other"
-        (root / "patchlab-commons.spdx.json").write_text(
-            json.dumps(document), encoding="utf-8"
-        )
+        (root / "patchlab-commons.spdx.json").write_text(json.dumps(document), encoding="utf-8")
         self._rewrite_manifest(root)
         self.assertIn("SBOM package field", "\n".join(verify(root, "0.2.0")))
 
@@ -182,6 +181,29 @@ class ReleaseAssetTests(unittest.TestCase):
 
 
 class ReleaseBuilderSecurityTests(unittest.TestCase):
+    def test_sdist_normalization_is_byte_reproducible(self) -> None:
+        root = Path(tempfile.mkdtemp())
+        archives: list[Path] = []
+        for index, timestamp in enumerate((1, 2)):
+            tar_bytes = io.BytesIO()
+            with tarfile.open(fileobj=tar_bytes, mode="w") as archive:
+                member = tarfile.TarInfo("patchlab_commons-0.2.0/README.md")
+                member.size = 5
+                member.mtime = timestamp
+                member.uid = timestamp
+                member.uname = f"builder-{timestamp}"
+                archive.addfile(member, io.BytesIO(b"safe\n"))
+            path = root / f"build-{index}.tar.gz"
+            path.write_bytes(gzip.compress(tar_bytes.getvalue(), mtime=timestamp))
+            reproducible_sdist.normalize_sdist(path, 1234567890)
+            archives.append(path)
+
+        self.assertEqual(archives[0].read_bytes(), archives[1].read_bytes())
+        self.assertEqual(int.from_bytes(archives[0].read_bytes()[4:8], "little"), 1234567890)
+        with tarfile.open(archives[0], "r:gz") as archive:
+            member = archive.getmember("patchlab_commons-0.2.0/README.md")
+            self.assertEqual((member.mtime, member.uid, member.gid), (1234567890, 0, 0))
+
     def test_release_outputs_must_stay_inside_repository(self) -> None:
         root = Path(tempfile.mkdtemp()).resolve()
         outside = root.parent / f"{root.name}-outside"

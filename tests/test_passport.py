@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from pathlib import Path
 
 from patchlab_commons.passport import create_passport_bundle, verify_passport_bundle
 
@@ -99,6 +99,7 @@ class PassportTests(unittest.TestCase):
             archive.extractall(extract, filter="data")
         passport = extract / "passport.json"
         import json
+
         data = json.loads(passport.read_text(encoding="utf-8"))
         data["artifacts"]["report.json"]["sha256"] = "not-a-digest"
         passport.write_text(json.dumps(data), encoding="utf-8")
@@ -118,6 +119,7 @@ class PassportTests(unittest.TestCase):
             archive.extractall(extract, filter="data")
         passport = extract / "passport.json"
         import json
+
         data = json.loads(passport.read_text(encoding="utf-8"))
         data["identity"] = "untrusted"
         passport.write_text(json.dumps(data), encoding="utf-8")
@@ -137,6 +139,7 @@ class PassportTests(unittest.TestCase):
             archive.extractall(extract, filter="data")
         passport = extract / "passport.json"
         import json
+
         data = json.loads(passport.read_text(encoding="utf-8"))
         del data["identity"]["head_sha"]
         passport.write_text(json.dumps(data), encoding="utf-8")
@@ -156,6 +159,7 @@ class PassportTests(unittest.TestCase):
             archive.extractall(extract, filter="data")
         passport = extract / "passport.json"
         import json
+
         data = json.loads(passport.read_text(encoding="utf-8"))
         data["verification"]["artifact_input"] = "normalized text"
         passport.write_text(json.dumps(data), encoding="utf-8")

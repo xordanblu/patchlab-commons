@@ -49,6 +49,8 @@ It rejects unknown fields, shell-string commands, mutable container image tags, 
 
 It removes or overrides variables that can redirect the repository, object database, index, configuration, hooks, diff tools, SSH, or credentials. It disables prompts, pagers, hooks, external diff, text conversion, file protocol access, and file-system monitors.
 
+It also disables replacement objects and lazy object fetching, and rejects grafts, alternate object stores, symlinked Git metadata, and metadata paths outside the declared untrusted repository boundary. This keeps object lookup inside the repository that was placed in scope.
+
 Command snapshots do not use `git checkout`, a worktree, or `git archive`. PatchLab reads the selected tree and blob objects directly. This prevents checkout filters, hooks, and `export-ignore` rules from changing the code that is executed.
 
 The materializer:

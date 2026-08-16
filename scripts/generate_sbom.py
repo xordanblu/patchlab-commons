@@ -4,17 +4,16 @@
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, datetime
 import hashlib
 import json
 import os
-from pathlib import Path
 import shutil
 import stat
 import subprocess
 import tempfile
 import tomllib
-
+from datetime import UTC, datetime
+from pathlib import Path
 
 _GIT_TIMEOUT_SECONDS = 60
 
@@ -50,6 +49,7 @@ def _git(root: Path, *args: str) -> str:
         result = subprocess.run(
             [
                 _git_executable(root),
+                "--no-replace-objects",
                 "--no-pager",
                 "--literal-pathspecs",
                 "-c",
@@ -63,8 +63,7 @@ def _git(root: Path, *args: str) -> str:
             cwd=root,
             check=True,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             text=True,
             timeout=_GIT_TIMEOUT_SECONDS,
             start_new_session=os.name != "nt",
@@ -74,6 +73,8 @@ def _git(root: Path, *args: str) -> str:
                 "GIT_CONFIG_NOSYSTEM": "1",
                 "GIT_CONFIG_GLOBAL": os.devnull,
                 "GIT_CONFIG_COUNT": "0",
+                "GIT_NO_REPLACE_OBJECTS": "1",
+                "GIT_NO_LAZY_FETCH": "1",
                 "GIT_TERMINAL_PROMPT": "0",
                 "GIT_PROTOCOL_FROM_USER": "0",
                 "GIT_OPTIONAL_LOCKS": "0",
@@ -109,7 +110,9 @@ def main() -> int:
     epoch = int(epoch_raw)
     if epoch < 0:
         raise ValueError("SOURCE_DATE_EPOCH must not be negative")
-    created = datetime.fromtimestamp(epoch, UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    created = (
+        datetime.fromtimestamp(epoch, UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    )
     namespace_seed = f"{project['name']}:{project['version']}:{commit}".encode()
     namespace = hashlib.sha256(namespace_seed).hexdigest()
     package_spdx = "SPDXRef-Package-patchlab-commons"

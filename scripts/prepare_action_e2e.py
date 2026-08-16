@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
 
 
 def run(repo: Path, *args: str) -> str:
@@ -35,8 +35,7 @@ def run(repo: Path, *args: str) -> str:
         cwd=repo,
         check=True,
         stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=True,
         timeout=30,
         env={

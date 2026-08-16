@@ -142,10 +142,14 @@ def check_workflows(context: CheckContext) -> list[Finding]:
                 target = uses.group(1)
                 if target.lower().startswith("actions/checkout@"):
                     head_workflow = context.repo.file_at(context.head_sha, path)
-                    if head_workflow is not None and _checkout_setting(
-                        head_workflow,
-                        line.new_line,
-                    ) is None:
+                    if (
+                        head_workflow is not None
+                        and _checkout_setting(
+                            head_workflow,
+                            line.new_line,
+                        )
+                        is None
+                    ):
                         disposition = context.config.policy.dangerous_permissions
                         findings.append(
                             Finding(

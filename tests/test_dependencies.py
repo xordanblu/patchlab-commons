@@ -53,10 +53,13 @@ require (
 )
 """
         parsed = _parse_dependencies("go.mod", text)
-        self.assertEqual(parsed, {
-            "example.invalid/one": "v1.2.3",
-            "example.invalid/two": "v2.0.0",
-        })
+        self.assertEqual(
+            parsed,
+            {
+                "example.invalid/one": "v1.2.3",
+                "example.invalid/two": "v2.0.0",
+            },
+        )
 
     def test_added_and_removed_manifest(self) -> None:
         self.assertEqual(

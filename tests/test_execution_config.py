@@ -3,12 +3,11 @@ from __future__ import annotations
 import unittest
 
 from patchlab_commons.config import (
-    ConfigError,
     DEFAULT_CONFIG,
+    ConfigError,
     is_pinned_container_image,
     load_config_text,
 )
-
 
 _DIGEST = "a" * 64
 
@@ -41,9 +40,7 @@ class ExecutionConfigTests(unittest.TestCase):
 
     def test_container_mode_requires_image(self) -> None:
         with self.assertRaisesRegex(ConfigError, "required"):
-            load_config_text(
-                """[project]\nname = \"demo\"\n[execution]\nmode = \"container\"\n"""
-            )
+            load_config_text("""[project]\nname = \"demo\"\n[execution]\nmode = \"container\"\n""")
 
     def test_credential_like_allowed_environment_is_rejected(self) -> None:
         text = """[project]\nname = \"demo\"\n[[commands]]\nname = \"test\"\ncommand = [\"python\", \"-V\"]\nallow_env = [\"SAFE_VALUE\", \"GITHUB_TOKEN\"]\n"""
@@ -57,9 +54,9 @@ class ExecutionConfigTests(unittest.TestCase):
 
     def test_invalid_execution_values_are_rejected(self) -> None:
         cases = (
-            ("mode = \"magic\"", "execution.mode"),
-            ("container_runtime = \"nerdctl\"", "container_runtime"),
-            ("network = \"false\"", "execution.network"),
+            ('mode = "magic"', "execution.mode"),
+            ('container_runtime = "nerdctl"', "container_runtime"),
+            ('network = "false"', "execution.network"),
             ("memory_mb = 0", "memory_mb"),
             ("cpus = false", "cpus"),
             ("pids_limit = -1", "pids_limit"),
@@ -67,7 +64,7 @@ class ExecutionConfigTests(unittest.TestCase):
         )
         for setting, message in cases:
             with self.subTest(setting=setting):
-                text = f"[project]\nname = \"demo\"\n[execution]\n{setting}\n"
+                text = f'[project]\nname = "demo"\n[execution]\n{setting}\n'
                 with self.assertRaisesRegex(ConfigError, message):
                     load_config_text(text)
 

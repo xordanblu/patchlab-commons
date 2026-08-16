@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import re
 import shutil
 import signal
@@ -11,8 +9,10 @@ import subprocess
 import tempfile
 import threading
 import time
-from typing import BinaryIO
 import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import BinaryIO
 
 from .config import CommandConfig, ExecutionConfig
 from .models import CommandResult
@@ -215,14 +215,11 @@ def _run_native_command(config: CommandConfig, phase: str, cwd: Path) -> Command
         # is an explicitly acknowledged weak boundary, so the candidate root
         # is added only to the child process.
         environment["PYTHONPATH"] = os.fspath(cwd.resolve())
-        popen_options: dict[str, object] = {}
-        if os.name == "nt":
-            popen_options["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            popen_options["start_new_session"] = True
+        creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0
+        start_new_session = os.name != "nt"
 
         process: subprocess.Popen[bytes] | None = None
-        threads: tuple[threading.Thread, threading.Thread] = ()
+        threads: tuple[threading.Thread, ...] = ()
         try:
             command = _resolve_native_command(config.command, cwd, environment)
             process = subprocess.Popen(
@@ -232,7 +229,8 @@ def _run_native_command(config: CommandConfig, phase: str, cwd: Path) -> Command
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                **popen_options,
+                creationflags=creationflags,
+                start_new_session=start_new_session,
             )
             threads = _start_capture_threads(process, stdout_capture, stderr_capture)
             try:
@@ -272,6 +270,7 @@ def _run_native_command(config: CommandConfig, phase: str, cwd: Path) -> Command
         network_enabled=True,
     )
 
+
 def _run_container_command(
     config: CommandConfig,
     phase: str,
@@ -295,11 +294,9 @@ def _run_container_command(
         runtime_home = Path(runtime_home_raw)
         runtime_env = _runtime_environment(runtime_home)
         environment_file = _write_container_environment_file(runtime_home, config.allow_env)
-        command = _container_command(
-            executor, cwd, name, config, environment_file=environment_file
-        )
+        command = _container_command(executor, cwd, name, config, environment_file=environment_file)
         process: subprocess.Popen[bytes] | None = None
-        threads: tuple[threading.Thread, threading.Thread] = ()
+        threads: tuple[threading.Thread, ...] = ()
         try:
             process = subprocess.Popen(
                 command,
@@ -359,6 +356,7 @@ def _run_container_command(
         network_enabled=executor.network,
     )
 
+
 def _container_command(
     executor: ExecutorSelection,
     cwd: Path,
@@ -379,6 +377,8 @@ def _container_command(
         )
 
     network = "bridge" if executor.network else "none"
+    # This names an in-container tmpfs mount; it is never used as a host temporary path.
+    temporary_mount = f"/tmp:rw,noexec,nosuid,nodev,size={executor.tmpfs_mb}m,mode=1777"  # nosec B108
     command = [
         executor.runtime_path,
         "run",
@@ -407,7 +407,7 @@ def _container_command(
         "--shm-size",
         "16m",
         "--tmpfs",
-        f"/tmp:rw,noexec,nosuid,nodev,size={executor.tmpfs_mb}m,mode=1777",
+        temporary_mount,
         "--tmpfs",
         "/run:rw,noexec,nosuid,nodev,size=16m,mode=755",
         "--user",
@@ -436,6 +436,7 @@ def _container_command(
     command.append(executor.container_image)
     command.extend(config.command)
     return command
+
 
 def _find_container_runtime(
     preference: str, *, untrusted_root: Path | None = None
@@ -522,9 +523,7 @@ def _write_container_environment_file(home: Path, allow_env: tuple[str, ...]) ->
     return path
 
 
-def _remove_container(
-    runtime: str, name: str, environment: dict[str, str]
-) -> tuple[bool, str]:
+def _remove_container(runtime: str, name: str, environment: dict[str, str]) -> tuple[bool, str]:
     if not runtime:
         return False, "container cleanup could not run because the runtime path is empty"
     try:
@@ -549,8 +548,7 @@ def _remove_container(
             ],
             env=environment,
             stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            capture_output=True,
             timeout=10,
             check=False,
         )
@@ -644,7 +642,7 @@ def _drain_stream(stream: BinaryIO, capture: _BoundedCapture) -> None:
 
 def _finish_capture_threads(
     process: subprocess.Popen[bytes],
-    threads: tuple[threading.Thread, threading.Thread],
+    threads: tuple[threading.Thread, ...],
 ) -> None:
     for thread in threads:
         thread.join(timeout=2)

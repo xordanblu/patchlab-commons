@@ -266,7 +266,7 @@ Los resultados listos para revisar están en [`examples/sample-passport`](exampl
 
 PatchLab protege el coordinador contra formas comunes de sustitución de módulos Python y variables hostiles de Git. La acción inicia Python en modo aislado y sin `site`. Solo importa el código incluido con la acción. No ejecuta `pip` durante el arranque.
 
-Git usa un entorno mínimo y no interactivo. Las copias tienen límites de archivos, tamaño, rutas, modos y enlaces simbólicos.
+Git usa un entorno mínimo y no interactivo. Se desactivan los objetos de reemplazo y la obtención diferida de objetos; se rechazan grafts, almacenes alternativos, metadatos enlazados y metadatos fuera del límite del repositorio. Las copias tienen límites de archivos, tamaño, rutas, modos y enlaces simbólicos.
 
 El coordinador confiable escribe y verifica la evidencia final fuera del contenedor no confiable.
 

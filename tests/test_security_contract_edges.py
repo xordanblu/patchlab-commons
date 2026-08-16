@@ -3,10 +3,10 @@ from __future__ import annotations
 import gzip
 import io
 import json
-from pathlib import Path, PurePosixPath
 import tarfile
 import tempfile
 import unittest
+from pathlib import Path, PurePosixPath
 from unittest.mock import patch
 
 from patchlab_commons import passport as passport_module
@@ -20,8 +20,8 @@ from patchlab_commons.gitutils import (
     _write_snapshot_link,
 )
 from patchlab_commons.passport import (
-    _BytesReader,
     _MAX_MEMBER_BYTES,
+    _BytesReader,
     _read_member,
     _valid_artifact_spec,
     _valid_identity,
@@ -165,9 +165,7 @@ class PassportValidationEdgeTests(unittest.TestCase):
 
     def test_artifact_spec_rejects_bool_size_and_extra_keys(self) -> None:
         self.assertFalse(_valid_artifact_spec({"sha256": "a" * 64, "size": True}))
-        self.assertFalse(
-            _valid_artifact_spec({"sha256": "a" * 64, "size": 1, "extra": "x"})
-        )
+        self.assertFalse(_valid_artifact_spec({"sha256": "a" * 64, "size": 1, "extra": "x"}))
         self.assertTrue(_valid_artifact_spec({"sha256": "a" * 64, "size": 0}))
 
     def test_bytes_reader_supports_full_and_bounded_reads(self) -> None:
@@ -208,7 +206,13 @@ class PassportValidationEdgeTests(unittest.TestCase):
 
         duplicate = root / "duplicate.tar.gz"
         with tarfile.open(duplicate, "w:gz") as archive:
-            for name in ("report.json", "report.json", "report.md", "results.sarif", "passport.json"):
+            for name in (
+                "report.json",
+                "report.json",
+                "report.md",
+                "results.sarif",
+                "passport.json",
+            ):
                 raw = b"{}"
                 info = tarfile.TarInfo(name)
                 info.size = len(raw)
@@ -248,8 +252,12 @@ class GitSnapshotEdgeTests(unittest.TestCase):
             (b"100644 blob short 1\tfile\0", "object id"),
             (b"100644 blob " + b"a" * 40 + b" nope\tfile\0", "blob size"),
             (
-                b"100644 blob " + b"a" * 40 + b" 1\tfile\0"
-                b"100644 blob " + b"b" * 40 + b" 1\tfile\0",
+                b"100644 blob "
+                + b"a" * 40
+                + b" 1\tfile\0"
+                + b"100644 blob "
+                + b"b" * 40
+                + b" 1\tfile\0",
                 "duplicate",
             ),
         )

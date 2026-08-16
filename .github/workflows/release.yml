@@ -22,6 +22,7 @@ env:
 jobs:
   build:
     name: Validate and build release assets
+    if: ${{ github.ref_name != 'v0.1.0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -106,7 +107,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH
           python -I -m build --outdir dist-one
           rm -rf build src/*.egg-info
           python -I -m build --outdir dist-two
@@ -161,7 +163,7 @@ jobs:
           subject-path: release/*
 
   github-release:
-    name: Publish GitHub prerelease
+    name: Publish GitHub release
     needs: [build, attest]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -185,7 +187,6 @@ jobs:
           git rev-parse -q --verify "refs/tags/$GITHUB_REF_NAME"
           gh release create "$GITHUB_REF_NAME" release/* \
             --verify-tag \
-            --prerelease \
             --title "PatchLab Commons $GITHUB_REF_NAME" \
             --notes-file RELEASE-NOTES.md
           gh api --method POST \

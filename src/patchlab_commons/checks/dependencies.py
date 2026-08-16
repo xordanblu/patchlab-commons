@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import PurePosixPath
 import re
 import tomllib
-from typing import Any
+from pathlib import PurePosixPath
 
 from ..models import Disposition, Finding, Severity
 from . import CheckContext
@@ -104,21 +103,26 @@ def _dependency_delta(name: str, before: str | None, after: str | None) -> str |
 def _parse_dependencies(name: str, text: str) -> dict[str, str] | None:
     if name == "package.json":
         data = json.loads(text)
-        result: dict[str, str] = {}
-        for section in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies"):
+        package_result: dict[str, str] = {}
+        for section in (
+            "dependencies",
+            "devDependencies",
+            "peerDependencies",
+            "optionalDependencies",
+        ):
             values = data.get(section, {})
             if isinstance(values, dict):
-                result.update({str(key): str(value) for key, value in values.items()})
-        return result
+                package_result.update({str(key): str(value) for key, value in values.items()})
+        return package_result
     if name == "pyproject.toml":
         data = tomllib.loads(text)
-        result: dict[str, str] = {}
+        python_result: dict[str, str] = {}
         project = data.get("project", {})
         if isinstance(project, dict):
             for raw in project.get("dependencies", []) or []:
                 if isinstance(raw, str):
                     key = re.split(r"[<>=!~ ;\[]", raw, maxsplit=1)[0].strip().lower()
-                    result[key] = raw
+                    python_result[key] = raw
             optional = project.get("optional-dependencies", {})
             if isinstance(optional, dict):
                 for group in optional.values():
@@ -126,17 +130,17 @@ def _parse_dependencies(name: str, text: str) -> dict[str, str] | None:
                         for raw in group:
                             if isinstance(raw, str):
                                 key = re.split(r"[<>=!~ ;\[]", raw, maxsplit=1)[0].strip().lower()
-                                result[key] = raw
-        return result
+                                python_result[key] = raw
+        return python_result
     if name.startswith("requirements") and name.endswith(".txt"):
-        result = {}
+        requirements_result: dict[str, str] = {}
         for raw in text.splitlines():
             line = raw.strip()
             if not line or line.startswith("#") or line.startswith("-"):
                 continue
             key = re.split(r"[<>=!~ ;\[]", line, maxsplit=1)[0].strip().lower()
-            result[key] = line
-        return result
+            requirements_result[key] = line
+        return requirements_result
     if name == "Cargo.toml":
         data = tomllib.loads(text)
         result = {}

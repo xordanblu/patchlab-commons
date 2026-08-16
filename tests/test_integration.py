@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from patchlab_commons.engine import VerificationEngine, VerificationRequest
 from patchlab_commons.models import Outcome
 from patchlab_commons.passport import verify_passport_bundle
-
 from tests.helpers import commit_all, init_repo
-
 
 SAFE_CONFIG = """
 [project]
@@ -182,7 +180,9 @@ jobs:
         (repo / "patchlab.toml").write_text(trusted, encoding="utf-8")
         base = commit_all(repo, "trusted policy")
 
-        weakened = trusted.replace('dangerous_permissions = "deny"', 'dangerous_permissions = "allow"')
+        weakened = trusted.replace(
+            'dangerous_permissions = "deny"', 'dangerous_permissions = "allow"'
+        )
         weakened = weakened.replace('workflow_changes = "review"', 'workflow_changes = "allow"')
         (repo / "patchlab.toml").write_text(weakened, encoding="utf-8")
         (repo / ".github" / "workflows" / "ci.yml").write_text(
@@ -203,7 +203,9 @@ jobs:
     def test_optional_command_can_require_review_or_fail_strictly(self) -> None:
         repo = Path(tempfile.mkdtemp()) / "repo"
         init_repo(repo)
-        config = SAFE_CONFIG.split("[[commands]]", 1)[0] + """
+        config = (
+            SAFE_CONFIG.split("[[commands]]", 1)[0]
+            + """
 [[commands]]
 name = "optional-check"
 command = ["python", "-c", "raise SystemExit(7)"]
@@ -212,6 +214,7 @@ expected_exit = "zero"
 timeout_seconds = 30
 required = false
 """
+        )
         (repo / "patchlab.toml").write_text(config, encoding="utf-8")
         (repo / "file.txt").write_text("base\n", encoding="utf-8")
         base = commit_all(repo, "base")
