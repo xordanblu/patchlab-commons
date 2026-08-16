@@ -109,6 +109,19 @@ The test suite covers these failure modes:
 - malformed, oversized, duplicated, unexpected, and modified passport contents;
 - unsafe GitHub permissions, triggers, credentials, mutable action references, and remote shell execution.
 
+## Project self-verification
+
+PatchLab compared the initial core commit `f6f15de` with commit `a5875d3` by using the policy stored in the base revision.
+
+- Outcome: `pass`
+- Changed files: 5
+- Required commands: 2 of 2 passed
+- Findings: 0
+- Bundle verification: valid
+- Bundle SHA-256: `ffdfa57fd63131c8e09b510ff6115fb47e6b3fd7c5a31d2239edc3188ac4cf55`
+
+This bundle verifies the stated commit range. The later commit that records this result is intentionally outside that range.
+
 ## Known limits
 
 PatchLab executes configured project commands. Detached worktrees are not an operating-system sandbox.
