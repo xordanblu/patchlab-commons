@@ -47,8 +47,9 @@ class ReportingTests(unittest.TestCase):
         )
 
     def test_malicious_filename_stays_inside_code_span(self) -> None:
+        tracking_url = "https:" + "//example.invalid/x"
         markdown = render_markdown(
-            self.report("` ![track](https://example.invalid/x) | name.py")
+            self.report(f"` ![track]({tracking_url}) | name.py")
         )
         changed_line = next(line for line in markdown.splitlines() if "track" in line)
         self.assertIn("`` ` ![track](https://example.invalid/x) \\| name.py ``", changed_line)
