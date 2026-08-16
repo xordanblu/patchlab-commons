@@ -64,6 +64,8 @@ class SafeIoTests(unittest.TestCase):
             safe_write_text(target, "new")
             self.assertEqual(target.read_text(encoding="utf-8"), "new")
             self.assertFalse(target.is_symlink())
+            if os.name != "nt":
+                self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
     def test_absolute_output_directory_is_supported(self) -> None:
         root = Path(tempfile.mkdtemp())
@@ -80,6 +82,16 @@ class SafeIoTests(unittest.TestCase):
         directory = Path(tempfile.mkdtemp())
         with self.assertRaises(UnsafeOutputPath):
             replace_file(directory / "missing.tmp", directory / "result.bin")
+
+    def test_replace_file_makes_final_evidence_private(self) -> None:
+        directory = Path(tempfile.mkdtemp())
+        temporary = directory / "prepared.tmp"
+        target = directory / "result.bin"
+        temporary.write_bytes(b"evidence")
+        replace_file(temporary, target)
+        self.assertEqual(target.read_bytes(), b"evidence")
+        if os.name != "nt":
+            self.assertEqual(target.stat().st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

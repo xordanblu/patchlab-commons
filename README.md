@@ -268,7 +268,7 @@ PatchLab protects its coordinator from common Python import replacement and host
 
 Git operations use a minimal, non-interactive environment. Replacement objects and lazy object fetches are disabled; grafts, alternate object stores, symlinked metadata, and metadata outside the repository boundary are rejected. Snapshots have file-count, member-size, total-size, path, file-mode, and symbolic-link limits.
 
-The trusted coordinator writes and verifies final evidence outside the untrusted container.
+The trusted coordinator writes and verifies final evidence outside the untrusted container. Newly written evidence files use owner-only permissions on POSIX hosts.
 
 Read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and [`SECURITY.md`](SECURITY.md) before security-sensitive use.
 

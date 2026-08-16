@@ -69,7 +69,7 @@ def safe_write_bytes(path: Path, content: bytes) -> None:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temporary, 0o644)
+        os.chmod(temporary, 0o600)
         _reject_destination(path)
         os.replace(temporary, path)
         temporary = None
@@ -85,7 +85,7 @@ def replace_file(temporary: Path, target: Path) -> None:
     _reject_destination(target)
     if temporary.is_symlink() or not temporary.is_file():
         raise UnsafeOutputPath(f"temporary output is not a regular file: {temporary}")
-    os.chmod(temporary, 0o644)
+    os.chmod(temporary, 0o600)
     os.replace(temporary, target)
 
 

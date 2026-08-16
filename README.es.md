@@ -268,7 +268,7 @@ PatchLab protege el coordinador contra formas comunes de sustitución de módulo
 
 Git usa un entorno mínimo y no interactivo. Se desactivan los objetos de reemplazo y la obtención diferida de objetos; se rechazan grafts, almacenes alternativos, metadatos enlazados y metadatos fuera del límite del repositorio. Las copias tienen límites de archivos, tamaño, rutas, modos y enlaces simbólicos.
 
-El coordinador confiable escribe y verifica la evidencia final fuera del contenedor no confiable.
+El coordinador confiable escribe y verifica la evidencia final fuera del contenedor no confiable. Los archivos de evidencia nuevos usan permisos exclusivos del propietario en sistemas POSIX.
 
 Lee [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) y [`SECURITY.md`](SECURITY.md) antes de usar PatchLab en una revisión sensible.
 

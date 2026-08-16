@@ -133,7 +133,7 @@ This table uses public workflow, release, and documentation endpoints rather tha
 | Linux container E2E | VERIFIED AS `Real Linux container isolation` | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
 | Pages | PUBLISHED | https://xordanblu.github.io/patchlab-commons/ |
 | PyPI | NOT PUBLISHED; NOT REQUIRED FOR THE GITHUB RELEASE | — |
-| Tests | 221 DISCOVERED TESTS | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| Tests | 222 DISCOVERED TESTS | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
 | Combined line and branch coverage | 90.10%; 91.97% statements and 85.00% branches | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
 | External repositories | 0 verified at preparation time | — |
 | External contributors | 0 verified at preparation time | — |
