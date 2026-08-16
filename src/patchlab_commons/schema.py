@@ -181,7 +181,7 @@ def report_schema() -> dict[str, Any]:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": (
             "https://raw.githubusercontent.com/xordanblu/patchlab-commons/"
-            "v0.1.0/docs/report.schema.json"
+            "v0.2.0/docs/report.schema.json"
         ),
         "title": "PatchLab Patch Passport Report",
         "description": "Machine-readable evidence for one base-to-candidate Git comparison.",
@@ -285,7 +285,7 @@ def passport_schema() -> dict[str, Any]:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": (
             "https://raw.githubusercontent.com/xordanblu/patchlab-commons/"
-            "v0.1.0/docs/passport.schema.json"
+            "v0.2.0/docs/passport.schema.json"
         ),
         "title": "PatchLab Patch Passport Manifest",
         "description": "Digest manifest and identity for a Patch Passport bundle.",

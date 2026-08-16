@@ -4,7 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from patchlab.doctor import run_doctor
+from patchlab_commons.doctor import run_doctor
 from tests.helpers import commit_all, init_repo
 
 

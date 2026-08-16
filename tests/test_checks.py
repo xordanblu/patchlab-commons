@@ -4,11 +4,11 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from patchlab.checks import CheckContext, run_checks
-from patchlab.config import PatchLabConfig, PolicyConfig, ScopeConfig
-from patchlab.diffparse import parse_unified_diff
-from patchlab.gitutils import GitRepo
-from patchlab.models import ChangedFile, Disposition
+from patchlab_commons.checks import CheckContext, run_checks
+from patchlab_commons.config import PatchLabConfig, PolicyConfig, ScopeConfig
+from patchlab_commons.diffparse import parse_unified_diff
+from patchlab_commons.gitutils import GitRepo
+from patchlab_commons.models import ChangedFile, Disposition
 
 from tests.helpers import commit_all, init_repo
 

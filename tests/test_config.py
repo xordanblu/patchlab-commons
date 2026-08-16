@@ -4,8 +4,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from patchlab.config import ConfigError, DEFAULT_CONFIG, load_config
-from patchlab.models import Disposition
+from patchlab_commons.config import ConfigError, DEFAULT_CONFIG, load_config
+from patchlab_commons.models import Disposition
 
 
 class ConfigTests(unittest.TestCase):

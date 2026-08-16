@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from patchlab.models import (
+from patchlab_commons.models import (
     ChangedFile,
     CommandResult,
     Disposition,
@@ -11,8 +11,8 @@ from patchlab.models import (
     Severity,
     VerificationReport,
 )
-from patchlab.reporting import render_markdown
-from patchlab.sarif import build_sarif
+from patchlab_commons.reporting import render_markdown
+from patchlab_commons.sarif import build_sarif
 
 
 class ReportingTests(unittest.TestCase):

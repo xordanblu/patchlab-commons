@@ -6,9 +6,9 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from patchlab.engine import VerificationEngine, VerificationRequest
-from patchlab.models import Outcome
-from patchlab.passport import verify_passport_bundle
+from patchlab_commons.engine import VerificationEngine, VerificationRequest
+from patchlab_commons.models import Outcome
+from patchlab_commons.passport import verify_passport_bundle
 
 from tests.helpers import commit_all, init_repo
 
@@ -93,7 +93,7 @@ class IntegrationTests(unittest.TestCase):
 
     def test_diff_metadata_mismatch_is_blocking(self) -> None:
         repo, base, head = self.create_safe_patch()
-        with patch("patchlab.engine.parse_unified_diff", return_value=[]):
+        with patch("patchlab_commons.engine.parse_unified_diff", return_value=[]):
             result = VerificationEngine().verify(
                 VerificationRequest(
                     repository=repo,

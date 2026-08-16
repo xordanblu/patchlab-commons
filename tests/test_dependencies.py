@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from patchlab.checks.dependencies import _dependency_delta, _parse_dependencies
+from patchlab_commons.checks.dependencies import _dependency_delta, _parse_dependencies
 
 
 class DependencyParserTests(unittest.TestCase):

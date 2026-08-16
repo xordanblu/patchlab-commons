@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from patchlab.safeio import (
+from patchlab_commons.safeio import (
     UnsafeOutputPath,
     ensure_output_directory,
     replace_file,

@@ -5,8 +5,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from patchlab.engine import VerificationEngine, VerificationRequest
-from patchlab.schema import passport_schema, report_schema
+from patchlab_commons.engine import VerificationEngine, VerificationRequest
+from patchlab_commons.schema import passport_schema, report_schema
 
 from tests.helpers import commit_all, init_repo
 

@@ -7,9 +7,9 @@ import shutil
 import subprocess
 import tempfile
 
-from patchlab.engine import VerificationEngine, VerificationRequest
-from patchlab.models import Outcome
-from patchlab.passport import verify_passport_bundle
+from patchlab_commons.engine import VerificationEngine, VerificationRequest
+from patchlab_commons.models import Outcome
+from patchlab_commons.passport import verify_passport_bundle
 
 
 CONFIG = """

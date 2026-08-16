@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from patchlab.config import CommandConfig
-from patchlab.runner import run_command, sanitized_environment
+from patchlab_commons.config import CommandConfig
+from patchlab_commons.runner import run_command, sanitized_environment
 
 
 class RunnerTests(unittest.TestCase):

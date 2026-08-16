@@ -106,7 +106,7 @@ runs:
         fi
 
         set +e
-        python -m patchlab "${args[@]}"
+        python -m patchlab_commons "${args[@]}"
         status=$?
         set -e
 

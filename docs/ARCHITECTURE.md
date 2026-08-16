@@ -35,11 +35,11 @@ Git head ref ──► worktree ──┘
 
 ### Configuration loader
 
-`src/patchlab/config.py` parses TOML with the Python standard library. It validates every supported field and rejects shell-string commands.
+`src/patchlab_commons/config.py` parses TOML with the Python standard library. It validates every supported field and rejects shell-string commands.
 
 ### Git adapter
 
-`src/patchlab/gitutils.py` resolves refs, reads commit metadata, obtains diffs, and creates detached worktrees.
+`src/patchlab_commons/gitutils.py` resolves refs, reads commit metadata, obtains diffs, and creates detached worktrees.
 
 NUL-delimited Git metadata preserves exact paths for spaces, renames, binary files, and unusual names. Parsed diff hunks are aligned with this authoritative metadata.
 
@@ -49,7 +49,7 @@ PatchLab compares commit objects. Uncommitted working-tree files are not silentl
 
 ### Command runner
 
-`src/patchlab/runner.py` executes argument arrays without a shell.
+`src/patchlab_commons/runner.py` executes argument arrays without a shell.
 
 For each command it creates a disposable home and temporary directory. It removes unapproved environment variables, closes standard input, disables normal user configuration, captures output through temporary files, bounds stored output, redacts common credential forms, applies a timeout, and terminates the process group where supported.
 
@@ -67,11 +67,11 @@ Each result records:
 
 ### Diff parser
 
-`src/patchlab/diffparse.py` converts a unified Git diff into file and line records. Static checks inspect only additions or deletions relevant to their rule.
+`src/patchlab_commons/diffparse.py` converts a unified Git diff into file and line records. Static checks inspect only additions or deletions relevant to their rule.
 
 ### Policy checks
 
-`src/patchlab/checks/` contains independent checks.
+`src/patchlab_commons/checks/` contains independent checks.
 
 | Module | Responsibility |
 |---|---|
@@ -86,7 +86,7 @@ A check returns findings. It does not modify code.
 
 ### Engine
 
-`src/patchlab/engine.py` coordinates the comparison.
+`src/patchlab_commons/engine.py` coordinates the comparison.
 
 It:
 
@@ -100,19 +100,19 @@ It:
 
 ### Safe output
 
-`src/patchlab/safeio.py` keeps relative output below the repository root. It rejects symbolic-link redirection and writes regular files through temporary files and atomic replacement.
+`src/patchlab_commons/safeio.py` keeps relative output below the repository root. It rejects symbolic-link redirection and writes regular files through temporary files and atomic replacement.
 
 ### Reporting
 
-`src/patchlab/reporting.py` writes JSON and Markdown. Dynamic Markdown values are flattened and enclosed in safe code spans or escaped text.
+`src/patchlab_commons/reporting.py` writes JSON and Markdown. Dynamic Markdown values are flattened and enclosed in safe code spans or escaped text.
 
-`src/patchlab/sarif.py` maps findings into SARIF 2.1.0.
+`src/patchlab_commons/sarif.py` maps findings into SARIF 2.1.0.
 
-`src/patchlab/schema.py` publishes strict JSON Schemas for the report and passport manifest.
+`src/patchlab_commons/schema.py` publishes strict JSON Schemas for the report and passport manifest.
 
 ### Passport builder
 
-`src/patchlab/passport.py` calculates SHA-256 digests and writes a deterministic archive.
+`src/patchlab_commons/passport.py` calculates SHA-256 digests and writes a deterministic archive.
 
 The archive builder enforces member and total size limits. The verifier requires the exact member set and validates manifest types before hashing.
 

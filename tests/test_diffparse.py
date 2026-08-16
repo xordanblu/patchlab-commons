@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from patchlab.diffparse import FileDiff, align_file_diffs, parse_unified_diff
-from patchlab.models import ChangedFile
+from patchlab_commons.diffparse import FileDiff, align_file_diffs, parse_unified_diff
+from patchlab_commons.models import ChangedFile
 
 
 DIFF = """diff --git a/app.py b/app.py

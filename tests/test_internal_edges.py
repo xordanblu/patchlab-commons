@@ -6,8 +6,8 @@ import sys
 import unittest
 from unittest.mock import patch
 
-from patchlab.checks import network, scope, secrets, tests, workflows
-from patchlab.models import Disposition, Severity
+from patchlab_commons.checks import network, scope, secrets, tests, workflows
+from patchlab_commons.models import Disposition, Severity
 
 
 class InternalEdgeTests(unittest.TestCase):
@@ -49,9 +49,9 @@ class InternalEdgeTests(unittest.TestCase):
             "sys.stdout",
             output,
         ), self.assertRaises(SystemExit) as raised:
-            runpy.run_module("patchlab", run_name="__main__")
+            runpy.run_module("patchlab_commons", run_name="__main__")
         self.assertEqual(raised.exception.code, 0)
-        self.assertIn("PatchLab Commons 0.1.0", output.getvalue())
+        self.assertIn("PatchLab Commons 0.2.0", output.getvalue())
 
 
 if __name__ == "__main__":

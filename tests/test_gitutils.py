@@ -6,7 +6,7 @@ from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from patchlab.gitutils import GitRepo, _public_repository_identifier
+from patchlab_commons.gitutils import GitRepo, _public_repository_identifier
 
 from tests.helpers import commit_all, git, init_repo
 
@@ -154,7 +154,7 @@ class GitUtilsTests(unittest.TestCase):
             head = commit_all(repo, "head")
             adapter = GitRepo(repo)
 
-            with patch("patchlab.gitutils._MAX_GIT_OUTPUT_BYTES", 64):
+            with patch("patchlab_commons.gitutils._MAX_GIT_OUTPUT_BYTES", 64):
                 with self.assertRaisesRegex(RuntimeError, "safety limit"):
                     adapter.unified_diff(base, head)
 

@@ -6,8 +6,8 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
-from patchlab.cli import main
-from patchlab.passport import create_passport_bundle
+from patchlab_commons.cli import main
+from patchlab_commons.passport import create_passport_bundle
 
 from tests.helpers import commit_all, init_repo
 

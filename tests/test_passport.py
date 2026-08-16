@@ -5,7 +5,7 @@ import tarfile
 import tempfile
 import unittest
 
-from patchlab.passport import create_passport_bundle, verify_passport_bundle
+from patchlab_commons.passport import create_passport_bundle, verify_passport_bundle
 
 
 class PassportTests(unittest.TestCase):

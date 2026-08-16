@@ -318,7 +318,7 @@
       "type": "object"
     }
   },
-  "$id": "https://raw.githubusercontent.com/xordanblu/patchlab-commons/v0.1.0/docs/report.schema.json",
+  "$id": "https://raw.githubusercontent.com/xordanblu/patchlab-commons/v0.2.0/docs/report.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Machine-readable evidence for one base-to-candidate Git comparison.",
