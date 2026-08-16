@@ -269,6 +269,7 @@ CI tests Python 3.11, 3.12, and 3.13 on Linux, macOS, and Windows. It also build
 - [`docs/RULES.md`](docs/RULES.md)
 - [`docs/ROADMAP.md`](docs/ROADMAP.md)
 - [`docs/IMPACT.md`](docs/IMPACT.md)
+- [`docs/VALIDATION.md`](docs/VALIDATION.md)
 - [`GOVERNANCE.md`](GOVERNANCE.md)
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - [`SECURITY.md`](SECURITY.md)
