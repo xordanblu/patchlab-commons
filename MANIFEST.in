@@ -18,6 +18,7 @@ include patchlab.toml
 recursive-include docs *
 recursive-include examples *
 recursive-include scripts *.py
+recursive-include tests *.py
 recursive-include .github *.md *.yml
 prune **/__pycache__
 exclude .coverage
