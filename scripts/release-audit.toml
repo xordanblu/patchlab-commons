@@ -1,0 +1,43 @@
+[project]
+name = "patchlab-commons-release-audit"
+
+[execution]
+mode = "static"
+network = false
+memory_mb = 512
+cpus = 1.0
+pids_limit = 64
+tmpfs_mb = 32
+allow_unsafe_native = false
+
+[scope]
+allow = ["**"]
+deny = ["**/*.pem", "**/*.key", ".env", ".env.*"]
+max_files = 500
+max_added_lines = 50000
+max_deleted_lines = 50000
+
+[policy]
+dependency_changes = "review"
+workflow_changes = "review"
+dangerous_permissions = "review"
+secret_exposure = "deny"
+network_additions = "review"
+test_weakening = "deny"
+binary_files = "review"
+generated_files = "review"
+fail_on_review = false
+require_clean_worktree = false
+require_human_review = true
+
+[[commands]]
+name = "parse-python-sources"
+command = [
+  "python",
+  "-c",
+  "from pathlib import Path; files=sorted([*Path('src').rglob('*.py'),*Path('tests').rglob('*.py'),*Path('scripts').rglob('*.py')]); [compile(path.read_text(encoding='utf-8'),str(path),'exec') for path in files]; print(f'parsed {len(files)} Python files')",
+]
+run_on = "head"
+expected_exit = "zero"
+timeout_seconds = 120
+required = true

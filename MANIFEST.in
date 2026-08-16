@@ -1,6 +1,7 @@
 include .editorconfig
 include .gitattributes
 include .gitignore
+include AGENTS.md
 include Makefile
 include action.yml
 include CHANGELOG.md
@@ -12,12 +13,16 @@ include LICENSE
 include NOTICE
 include README.es.md
 include README.md
+include RELEASE-NOTES.md
 include SECURITY.md
 include SUPPORT.md
 include patchlab.toml
+include requirements-dev.txt
+include requirements-release.txt
+include requirements-runtime.txt
 recursive-include docs *
 recursive-include examples *
-recursive-include scripts *.py
+recursive-include scripts *.py *.toml
 recursive-include tests *.py
 recursive-include .github *.md *.yml
 prune **/__pycache__

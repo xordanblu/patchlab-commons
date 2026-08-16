@@ -1,0 +1,220 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  PATCHLAB_RELEASE_IMAGE: python:3.14-slim@sha256:cea0e6040540fb2b965b6e7fb5ffa00871e632eef63719f0ea54bca189ce14a6
+
+jobs:
+  build:
+    name: Validate and build release assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require an annotated final tag on verified main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_TYPE" = "tag"
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = "tag"
+          release_commit="$(git rev-parse "refs/tags/$GITHUB_REF_NAME^{commit}")"
+          main_commit="$(
+            gh api -H 'Accept: application/vnd.github+json' \
+              "/repos/$REPOSITORY/git/ref/heads/main" --jq .object.sha
+          )"
+          test "$release_commit" = "$main_commit"
+          test "$(git rev-parse 'v0.1.0^{commit}')" = "7b61eb318f894dbb5f496a77ed3fea669d6707b8"
+          for check in "Required CI" "CodeQL Python analysis"; do
+            conclusion="$(
+              gh api \
+                -H 'Accept: application/vnd.github+json' \
+                "/repos/$REPOSITORY/commits/$release_commit/check-runs?filter=latest&per_page=100" \
+                --jq ".check_runs | map(select(.name == \"$check\")) | sort_by(.completed_at) | reverse | .[0].conclusion // \"\""
+            )"
+            test "$conclusion" = "success" || {
+              echo "required hosted check is not successful: $check=$conclusion" >&2
+              exit 1
+            }
+          done
+          git update-ref refs/heads/main "$release_commit"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: python -I -m pip install -r requirements-dev.txt -e .
+      - run: python -I scripts/check_release.py --tag "$GITHUB_REF_NAME"
+      - run: python -I scripts/check_action_pins.py
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: bandit -r src scripts -ll
+      - run: actionlint -shellcheck="$(command -v shellcheck)"
+      - run: shellcheck --version
+      - run: pip-audit --requirement requirements-runtime.txt
+      - run: coverage run --branch -m unittest discover -s tests -v
+      - run: coverage report --show-missing --fail-under=90
+      - name: Pull the immutable release-audit image
+        run: docker pull "$PATCHLAB_RELEASE_IMAGE"
+      - name: Create a new self-verification Patch Passport
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I -m patchlab_commons verify \
+            --repo . \
+            --config scripts/release-audit.toml \
+            --config-source head \
+            --base v0.1.0 \
+            --head HEAD \
+            --output .patchlab/release-self-audit \
+            --execution-mode container \
+            --container-runtime docker \
+            --container-image "$PATCHLAB_RELEASE_IMAGE" \
+            --no-network \
+            --allow-review
+          python -I -m patchlab_commons verify-passport \
+            .patchlab/release-self-audit/patchlab-passport.tar.gz
+      - name: Run both Patch Passport demonstrations
+        shell: bash
+        run: |
+          python -I scripts/run_demo.py --output .patchlab/release-demo
+          python -I scripts/run_attack_demo.py --output .patchlab/release-blocked
+          python -I -m patchlab_commons verify-passport .patchlab/release-demo/patchlab-passport.tar.gz
+          python -I -m patchlab_commons verify-passport .patchlab/release-blocked/patchlab-passport.tar.gz
+      - name: Build reproducible wheel and source distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          python -I -m build --outdir dist-one
+          rm -rf build src/*.egg-info
+          python -I -m build --outdir dist-two
+          test "$(find dist-one -maxdepth 1 -type f | wc -l)" = "$(find dist-two -maxdepth 1 -type f | wc -l)"
+          for file in dist-one/*; do cmp "$file" "dist-two/$(basename "$file")"; done
+          mkdir release
+          cp dist-one/* release/
+          twine check release/*
+          python -I scripts/generate_sbom.py --output release/patchlab-commons.spdx.json
+          cp .patchlab/release-demo/patchlab-passport.tar.gz release/patchlab-demo-pass.tar.gz
+          cp .patchlab/release-blocked/patchlab-passport.tar.gz release/patchlab-blocked-passport.tar.gz
+          cp .patchlab/release-self-audit/patchlab-passport.tar.gz release/patchlab-self-verification-passport.tar.gz
+          python -I scripts/build_release_assets.py --dist release
+          python -I scripts/verify_release_assets.py \
+            --directory release \
+            --version "${GITHUB_REF_NAME#v}" \
+            --commit "$(git rev-parse HEAD)"
+      - name: Install release distributions in clean environments
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I -m venv "$RUNNER_TEMP/wheel-env"
+          "$RUNNER_TEMP/wheel-env/bin/python" -I -m pip install --no-deps release/*.whl
+          (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/wheel-env/bin/patchlab" --version)
+          python -I -m venv "$RUNNER_TEMP/sdist-env"
+          "$RUNNER_TEMP/sdist-env/bin/python" -I -m pip install setuptools==83.0.0
+          "$RUNNER_TEMP/sdist-env/bin/python" -I -m pip install --no-deps --no-build-isolation release/*.tar.gz
+          (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/sdist-env/bin/patchlab" --version)
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-assets
+          path: release/
+          if-no-files-found: error
+          retention-days: 30
+
+  attest:
+    name: Attest release assets
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release/*
+
+  github-release:
+    name: Publish GitHub prerelease
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release
+      - name: Create immutable-tag GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse -q --verify "refs/tags/$GITHUB_REF_NAME"
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --verify-tag \
+            --prerelease \
+            --title "PatchLab Commons $GITHUB_REF_NAME" \
+            --notes-file RELEASE-NOTES.md
+          gh api --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/release-verification.yml/dispatches" \
+            -f ref="$GITHUB_REF_NAME" \
+            -f "inputs[tag]=$GITHUB_REF_NAME"
+
+  pypi:
+    name: Publish to PyPI with Trusted Publishing
+    if: ${{ vars.PYPI_PUBLISH_ENABLED == 'true' }}
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/p/patchlab-commons
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-assets
+          path: release
+      - name: Copy only Python distributions
+        shell: bash
+        run: |
+          mkdir dist
+          cp release/patchlab_commons-*.whl release/patchlab_commons-*.tar.gz dist/
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          packages-dir: dist/

@@ -11,6 +11,7 @@ import sys
 import tomllib
 
 VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
+MINIMUM_PUBLISHABLE_VERSION = (0, 2, 0)
 
 
 def _module_version(path: Path) -> str:
@@ -52,9 +53,19 @@ def main() -> int:
     version = next(iter(unique)) if len(unique) == 1 else ""
     if version and not VERSION_RE.fullmatch(version):
         errors.append(f"version is not stable SemVer: {version}")
+    if version and VERSION_RE.fullmatch(version):
+        parsed = tuple(int(part) for part in version.split("."))
+        if parsed < MINIMUM_PUBLISHABLE_VERSION:
+            minimum = ".".join(str(part) for part in MINIMUM_PUBLISHABLE_VERSION)
+            errors.append(
+                f"version {version} is historical and must not be published; minimum is {minimum}"
+            )
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     if version and f"## [{version}]" not in changelog:
         errors.append(f"CHANGELOG.md has no [{version}] release section")
+    release_notes = (root / "RELEASE-NOTES.md").read_text(encoding="utf-8")
+    if version and version not in release_notes:
+        errors.append(f"RELEASE-NOTES.md does not identify version {version}")
     expected_tag = f"v{version}" if version else ""
     tag = args.tag.removeprefix("refs/tags/")
     if tag and tag != expected_tag:

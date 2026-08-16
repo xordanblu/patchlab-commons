@@ -1,0 +1,133 @@
+name: Release verification
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Annotated release tag to verify.
+        required: true
+        type: string
+
+permissions:
+  attestations: read
+  contents: read
+
+concurrency:
+  group: release-verification-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify published assets and attestations
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Download the published GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        run: gh release download "$RELEASE_TAG" --dir downloaded
+      - name: Verify the exact asset set and SHA-256 manifest
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          python -I scripts/verify_release_assets.py \
+            --directory downloaded \
+            --version "$version" \
+            --commit "$(git rev-parse HEAD)"
+          (cd downloaded && sha256sum -c SHA256SUMS.txt)
+      - name: Verify every GitHub artifact attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' asset; do
+            verified=false
+            for attempt in 1 2 3 4 5; do
+              if gh attestation verify "$asset" --repo "$GITHUB_REPOSITORY"; then
+                verified=true
+                break
+              fi
+              if [ "$attempt" -lt 5 ]; then sleep 10; fi
+            done
+            test "$verified" = true || {
+              echo "attestation verification failed: $asset" >&2
+              exit 1
+            }
+          done < <(find downloaded -maxdepth 1 -type f -print0 | sort -z)
+      - name: Install and test the downloaded wheel
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I -m venv "$RUNNER_TEMP/release-wheel"
+          "$RUNNER_TEMP/release-wheel/bin/python" -I -m pip install --no-deps downloaded/*.whl
+          (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/release-wheel/bin/patchlab" --version)
+          "$RUNNER_TEMP/release-wheel/bin/patchlab" verify-passport downloaded/patchlab-demo-pass.tar.gz
+          "$RUNNER_TEMP/release-wheel/bin/patchlab" verify-passport downloaded/patchlab-blocked-passport.tar.gz
+          "$RUNNER_TEMP/release-wheel/bin/patchlab" verify-passport downloaded/patchlab-self-verification-passport.tar.gz
+      - name: Install and test the downloaded source distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I -m venv "$RUNNER_TEMP/release-sdist"
+          "$RUNNER_TEMP/release-sdist/bin/python" -I -m pip install setuptools==83.0.0
+          "$RUNNER_TEMP/release-sdist/bin/python" -I -m pip install --no-deps --no-build-isolation downloaded/patchlab_commons-*.tar.gz
+          (cd "$RUNNER_TEMP" && "$RUNNER_TEMP/release-sdist/bin/patchlab" --version)
+      - name: Verify the downloaded Git bundle and remote tag identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$(find downloaded -maxdepth 1 -name '*.git.bundle' -print -quit)"
+          git bundle verify "$bundle"
+          git bundle list-heads "$bundle" | awk '{print $2}' | sort > "$RUNNER_TEMP/bundle-refs.txt"
+          printf '%s\n' \
+            refs/heads/main \
+            refs/tags/v0.1.0 \
+            "refs/tags/$RELEASE_TAG" | sort > "$RUNNER_TEMP/expected-bundle-refs.txt"
+          diff -u "$RUNNER_TEMP/expected-bundle-refs.txt" "$RUNNER_TEMP/bundle-refs.txt"
+          git init --bare "$RUNNER_TEMP/bundle-check.git"
+          git -C "$RUNNER_TEMP/bundle-check.git" fetch "$GITHUB_WORKSPACE/$bundle" \
+            'refs/heads/*:refs/heads/*' \
+            'refs/tags/*:refs/tags/*'
+          bundle_commit="$(git -C "$RUNNER_TEMP/bundle-check.git" rev-parse "$RELEASE_TAG^{commit}")"
+          ref_json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG")"
+          object_type="$(python -I -c 'import json,sys; print(json.load(sys.stdin)["object"]["type"])' <<<"$ref_json")"
+          object_sha="$(python -I -c 'import json,sys; print(json.load(sys.stdin)["object"]["sha"])' <<<"$ref_json")"
+          test "$object_type" = "tag"
+          remote_commit="$(gh api -H 'Accept: application/vnd.github+json' "/repos/$GITHUB_REPOSITORY/git/tags/$object_sha" --jq .object.sha)"
+          test "$bundle_commit" = "$remote_commit"
+          test "$(git -C "$RUNNER_TEMP/bundle-check.git" rev-parse 'v0.1.0^{commit}')" = "7b61eb318f894dbb5f496a77ed3fea669d6707b8"
+          {
+            echo "release_tag=$RELEASE_TAG"
+            echo "release_commit=$remote_commit"
+            echo "historical_v0.1.0=7b61eb318f894dbb5f496a77ed3fea669d6707b8"
+            echo "asset_count=$(find downloaded -maxdepth 1 -type f | wc -l)"
+            echo "attestations=verified"
+            echo "wheel=installed"
+            echo "sdist=installed"
+            echo "git_bundle=verified"
+          } > release-verification.txt
+          sha256sum downloaded/* >> release-verification.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-verification-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.event.release.tag_name }}
+          path: release-verification.txt
+          if-no-files-found: error
+          retention-days: 90
