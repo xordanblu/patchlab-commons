@@ -14,6 +14,7 @@ from patchlab_commons.runner import (
     ExecutionUnavailable,
     ExecutorSelection,
     _container_command,
+    _remove_container,
     _resolve_native_command,
     _runtime_environment,
     _write_container_environment_file,
@@ -192,6 +193,12 @@ class ExecutionSecurityTests(unittest.TestCase):
             with self.assertRaisesRegex(ExecutionUnavailable, "represented safely"):
                 _write_container_environment_file(home, ("SAFE_VALUE",))
 
+    def test_missing_allowed_values_do_not_create_an_environment_file(self) -> None:
+        home = Path(tempfile.mkdtemp())
+        with patch.dict(os.environ, {}, clear=True):
+            path = _write_container_environment_file(home, ("PATCHLAB_MISSING_VALUE",))
+        self.assertIsNone(path)
+
     def test_relative_native_program_cannot_escape_snapshot(self) -> None:
         parent = Path(tempfile.mkdtemp())
         cwd = parent / "repo"
@@ -345,6 +352,22 @@ class ContainerRuntimeBehaviorTests(unittest.TestCase):
                 "head",
                 cwd,
                 selected,
+            )
+
+    def test_cleanup_requires_an_absolute_runtime_path(self) -> None:
+        cleaned, detail = _remove_container("", "patchlab-test", {})
+        self.assertFalse(cleaned)
+        self.assertIn("runtime path is empty", detail)
+
+    @unittest.skipIf(os.name == "nt", "container mount syntax uses POSIX host paths")
+    def test_missing_snapshot_is_rejected_before_command_construction(self) -> None:
+        workspace = Path(tempfile.mkdtemp()) / "missing"
+        with self.assertRaisesRegex(ExecutionUnavailable, "does not exist"):
+            _container_command(
+                self._selection(Path("/usr/bin/docker")),
+                workspace,
+                "patchlab-test",
+                CommandConfig(name="missing", command=("true",)),
             )
 
     @unittest.skipIf(os.name == "nt", "fake container runtime requires POSIX paths")

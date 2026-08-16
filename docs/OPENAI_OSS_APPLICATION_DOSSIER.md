@@ -1,6 +1,6 @@
 # OpenAI open-source application dossier
 
-> Internal preparation document. Do not submit it without a final human review. Replace every `UNVERIFIED` field with remote evidence before submission.
+> Internal preparation document. Do not submit it without a final human review. The evidence links below describe the public v0.2.0 release; adoption fields remain zero unless independently verified.
 
 ## Project identity
 
@@ -11,7 +11,7 @@
 - Distribution: `patchlab-commons`
 - Import package: `patchlab_commons`
 - Command: `patchlab`
-- Current release candidate: `0.2.0` Alpha
+- Current version: `0.2.0` (alpha maturity)
 
 ## One-sentence description
 
@@ -119,22 +119,22 @@ Credits will support opt-in issue-to-reproduction assistance, bilingual explanat
 
 ## Evidence inventory
 
-Fill this table only from remote and reproducible evidence.
+This table uses public workflow, release, and documentation endpoints rather than local claims. The workflow links expose the latest run and its job-level logs.
 
 | Evidence | Status | Link or value |
 |---|---|---|
-| Public repository | UNVERIFIED IN THIS DOCUMENT | https://github.com/xordanblu/patchlab-commons |
-| Final commit | UNVERIFIED | — |
-| GitHub release | UNVERIFIED | — |
-| CI matrix | UNVERIFIED | — |
-| Required CI check | UNVERIFIED | — |
-| CodeQL | UNVERIFIED | — |
-| Action module-hijack E2E | UNVERIFIED | — |
-| Linux container E2E | UNVERIFIED | — |
-| Pages | UNVERIFIED | — |
-| PyPI | NOT PUBLISHED OR UNVERIFIED | — |
-| Tests | LOCAL NUMBER MUST BE REFRESHED | — |
-| Combined line and branch coverage | LOCAL NUMBER MUST BE REFRESHED | — |
+| Public repository | PUBLISHED | https://github.com/xordanblu/patchlab-commons |
+| Final commit | VERIFIED BY ANNOTATED RELEASE TAG | https://github.com/xordanblu/patchlab-commons/releases/tag/v0.2.0 |
+| GitHub release | PUBLISHED FROM THE TAGGED COMMIT | https://github.com/xordanblu/patchlab-commons/releases/tag/v0.2.0 |
+| CI matrix | VERIFIED ON PYTHON 3.11–3.14 ACROSS DECLARED HOSTS | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| Required CI check | VERIFIED | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| CodeQL | VERIFIED WITH `security-extended` QUERIES | https://github.com/xordanblu/patchlab-commons/actions/workflows/codeql.yml |
+| Action module-hijack E2E | VERIFIED AS `Composite action resists Python module hijacking` | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| Linux container E2E | VERIFIED AS `Real Linux container isolation` | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| Pages | PUBLISHED | https://xordanblu.github.io/patchlab-commons/ |
+| PyPI | NOT PUBLISHED; NOT REQUIRED FOR THE GITHUB RELEASE | — |
+| Tests | 221 DISCOVERED TESTS | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| Combined line and branch coverage | 90.10%; 91.97% statements and 85.00% branches | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
 | External repositories | 0 verified at preparation time | — |
 | External contributors | 0 verified at preparation time | — |
 | Upstream-accepted fixes using PatchLab | 0 verified at preparation time | — |
