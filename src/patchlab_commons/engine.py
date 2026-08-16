@@ -42,6 +42,7 @@ class VerificationRequest:
     container_image: str | None = None
     network: bool | None = None
     allow_unsafe_native: bool | None = None
+    untrusted_root: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,7 +53,10 @@ class VerificationResult:
 
 class VerificationEngine:
     def verify(self, request: VerificationRequest) -> VerificationResult:
-        repo = GitRepo(request.repository)
+        repo = GitRepo(
+            request.repository,
+            untrusted_root=request.untrusted_root or request.repository,
+        )
         base_sha = repo.resolve(request.base_ref)
         head_sha = repo.resolve(request.head_ref)
         config, config_text, config_location = _load_config(
@@ -297,7 +301,7 @@ class VerificationEngine:
 
         findings: list[Finding] = []
         try:
-            executor = select_executor(execution, untrusted_root=repo.path)
+            executor = select_executor(execution, untrusted_root=repo.untrusted_root)
         except ExecutionUnavailable as exc:
             findings.append(
                 Finding(

@@ -42,17 +42,28 @@ class ActionSecurityTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(payload, encoding="utf-8")
 
-        github_output = repo / "github-output.txt"
-        summary = repo / "summary.md"
+        workspace = repo.parent
+        hostile_tools = workspace / "hostile-tools"
+        hostile_tools.mkdir()
+        tool_marker = workspace / "TOOL_HIJACKED"
+        for name in ("git", "python", "docker", "podman"):
+            executable = hostile_tools / name
+            executable.write_text(
+                f"#!/bin/sh\nprintf hijacked > {str(tool_marker)!r}\nexit 97\n",
+                encoding="utf-8",
+            )
+            executable.chmod(0o755)
+        github_output = workspace / "github-output.txt"
+        summary = workspace / "summary.md"
         environment = os.environ.copy()
         environment.update(
             {
-                "GITHUB_WORKSPACE": str(repo),
+                "GITHUB_WORKSPACE": str(workspace),
                 "GITHUB_OUTPUT": str(github_output),
                 "GITHUB_STEP_SUMMARY": str(summary),
                 "PATCHLAB_BASE": base,
                 "PATCHLAB_HEAD": head,
-                "PATCHLAB_REPOSITORY": ".",
+                "PATCHLAB_REPOSITORY": repo.name,
                 "PATCHLAB_CONFIG": "patchlab.toml",
                 "PATCHLAB_OUTPUT": ".patchlab/action",
                 "PATCHLAB_CONFIG_SOURCE": "base",
@@ -64,6 +75,7 @@ class ActionSecurityTests(unittest.TestCase):
                 "PYTHONPATH": str(repo),
                 "PYTHONHOME": "",
                 "PYTHONSTARTUP": str(repo / "sitecustomize.py"),
+                "PATH": f"{hostile_tools}{os.pathsep}{environment.get('PATH', '')}",
             }
         )
         result = subprocess.run(
@@ -78,6 +90,7 @@ class ActionSecurityTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(marker.exists())
+        self.assertFalse(tool_marker.exists())
         output = github_output.read_text(encoding="utf-8")
         self.assertIn("outcome<<", output)
         self.assertIn("needs_review", output)
@@ -116,7 +129,9 @@ class ActionSecurityTests(unittest.TestCase):
         self.assertNotIn("python -m pip", action)
         self.assertNotIn("python -m patchlab", action)
         self.assertNotIn("python - ", action)
-        self.assertIn("python -I -S scripts/action_entry.py", action)
+        self.assertNotIn("run: python ", action)
+        self.assertIn('"$python_executable" -I -S scripts/action_entry.py', action)
+        self.assertIn("requires actions/setup-python", action)
         self.assertIn("working-directory: ${{ github.action_path }}", action)
 
 

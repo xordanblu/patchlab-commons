@@ -39,6 +39,24 @@ if not Path(_trusted_package.__file__).resolve().is_relative_to(_SOURCE_ROOT):
     raise RuntimeError("PatchLab was not imported from the trusted action source tree")
 
 
+def _sanitize_path(untrusted_root: Path) -> None:
+    raw_path = os.environ.get("PATH", "")
+    safe_entries: list[str] = []
+    for raw in raw_path.split(os.pathsep):
+        if not raw:
+            continue
+        try:
+            resolved = Path(raw).resolve()
+            resolved.relative_to(untrusted_root)
+        except ValueError:
+            safe_entries.append(raw)
+        except OSError:
+            continue
+    if not safe_entries:
+        raise RuntimeError("PATH has no executable directory outside GITHUB_WORKSPACE")
+    os.environ["PATH"] = os.pathsep.join(safe_entries)
+
+
 def _required(name: str) -> str:
     value = os.environ.get(name)
     if value is None or not value.strip():
@@ -103,6 +121,7 @@ def _write_summary(result: object, digest: str) -> None:
 
 def main() -> int:
     workspace = Path(_required("GITHUB_WORKSPACE")).resolve()
+    _sanitize_path(workspace)
     repository_input = Path(os.environ.get("PATCHLAB_REPOSITORY", "."))
     repository = _inside(
         workspace,
@@ -166,6 +185,7 @@ def main() -> int:
             container_image=os.environ.get("PATCHLAB_CONTAINER_IMAGE", ""),
             network=_boolean("PATCHLAB_NETWORK", False),
             allow_unsafe_native=False,
+            untrusted_root=workspace,
         )
     )
 

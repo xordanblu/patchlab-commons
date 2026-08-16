@@ -104,10 +104,23 @@ class GitSecurityTests(unittest.TestCase):
         fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         fake.chmod(0o755)
         with patch.dict(os.environ, {"PATH": str(repo)}, clear=False):
-            with self.assertRaisesRegex(GitError, "inside the untrusted repository"):
+            with self.assertRaisesRegex(GitError, "inside the declared untrusted root"):
                 _git_executable(repo)
 
     @unittest.skipIf(os.name == "nt", "POSIX executable fixtures are required")
+    def test_git_executable_is_rejected_from_a_sibling_in_the_untrusted_root(self) -> None:
+        workspace = Path(tempfile.mkdtemp())
+        repo = workspace / "repo"
+        repo.mkdir()
+        tools = workspace / "tools"
+        tools.mkdir()
+        fake = tools / "git"
+        fake.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+        fake.chmod(0o755)
+        with patch.dict(os.environ, {"PATH": str(tools)}, clear=False):
+            with self.assertRaisesRegex(GitError, "declared untrusted root"):
+                _git_executable(workspace)
+
     def test_git_commands_have_a_hard_timeout(self) -> None:
         root = Path(tempfile.mkdtemp())
         tools = Path(tempfile.mkdtemp())
@@ -146,8 +159,8 @@ class GitSecurityTests(unittest.TestCase):
             self.assertEqual((snapshot / "dir" / "link").read_text(encoding="utf-8"), "safe\n")
 
     def test_snapshot_rejects_nonportable_archive_names(self) -> None:
-        for name in ("..\\escape", "stream:payload"):
-            with self.assertRaisesRegex(GitError, "portable"):
+        for name in ("..\\escape", "stream:payload", "a//b", "a/./b"):
+            with self.assertRaisesRegex(GitError, "portable|escapes"):
                 _validate_snapshot_path(name)
 
     def test_snapshot_rejects_windows_device_names_and_trailing_characters(self) -> None:

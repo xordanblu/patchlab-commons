@@ -52,11 +52,26 @@ class _TreeEntry:
 
 
 class GitRepo:
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path).resolve()
+    def __init__(
+        self, path: str | Path, *, untrusted_root: str | Path | None = None
+    ) -> None:
+        requested = Path(path).resolve()
+        self.untrusted_root = Path(untrusted_root or requested).resolve()
+        try:
+            requested.relative_to(self.untrusted_root)
+        except ValueError as exc:
+            raise GitError("repository must stay inside the declared untrusted root") from exc
+        self.path = requested
         self._run("rev-parse", "--is-inside-work-tree")
         root = self._run("rev-parse", "--show-toplevel").stdout.strip()
         self.path = Path(root).resolve()
+        try:
+            self.path.relative_to(self.untrusted_root)
+            requested.relative_to(self.path)
+        except ValueError as exc:
+            raise GitError(
+                "resolved Git repository root is outside the requested trust boundary"
+            ) from exc
 
     def _run(self, *args: str, check: bool = True) -> GitCommandResult:
         stdout, stderr, returncode = _run_git_bounded(
@@ -64,6 +79,7 @@ class GitRepo:
             args,
             stdout_limit=_MAX_GIT_OUTPUT_BYTES,
             stderr_limit=_MAX_GIT_ERROR_BYTES,
+            untrusted_root=self.untrusted_root,
         )
         decoded_stdout = stdout.decode("utf-8", errors="replace")
         decoded_stderr = stderr.decode("utf-8", errors="replace")
@@ -78,6 +94,7 @@ class GitRepo:
             args,
             stdout_limit=_MAX_GIT_OUTPUT_BYTES,
             stderr_limit=_MAX_GIT_ERROR_BYTES,
+            untrusted_root=self.untrusted_root,
         )
         if check and returncode != 0:
             command = "git " + " ".join(args)
@@ -165,7 +182,9 @@ class GitRepo:
             raise GitError(f"git cat-file returned a negative size for {path}")
         if size > _MAX_SNAPSHOT_MEMBER_BYTES:
             return True
-        raw = _read_git_blob_prefix(self.path, object_name, size, 8192)
+        raw = _read_git_blob_prefix(
+            self.path, object_name, size, 8192, untrusted_root=self.untrusted_root
+        )
         return b"\x00" in raw
 
     def unified_diff(self, base_sha: str, head_sha: str) -> str:
@@ -187,6 +206,7 @@ class GitRepo:
             ("cat-file", "blob", f"{ref}:{path}"),
             stdout_limit=_MAX_GIT_OUTPUT_BYTES,
             stderr_limit=_MAX_GIT_ERROR_BYTES,
+            untrusted_root=self.untrusted_root,
         )
         return None if returncode != 0 else stdout
 
@@ -269,6 +289,7 @@ class GitRepo:
             ("cat-file", "blob", object_id),
             stdout_limit=expected_size,
             stderr_limit=_MAX_GIT_ERROR_BYTES,
+            untrusted_root=self.untrusted_root,
         )
         if returncode != 0:
             detail = stderr.decode("utf-8", errors="replace").strip()
@@ -284,7 +305,14 @@ class GitRepo:
         return _public_repository_identifier(remote) if remote else self.path.name
 
 
-def _read_git_blob_prefix(root: Path, object_name: str, size: int, limit: int) -> bytes:
+def _read_git_blob_prefix(
+    root: Path,
+    object_name: str,
+    size: int,
+    limit: int,
+    *,
+    untrusted_root: Path | None = None,
+) -> bytes:
     wanted = min(size, limit)
     stdout, stderr, returncode = _run_git_bounded(
         root,
@@ -292,6 +320,7 @@ def _read_git_blob_prefix(root: Path, object_name: str, size: int, limit: int) -
         stdout_limit=wanted,
         stderr_limit=_MAX_GIT_ERROR_BYTES,
         allow_stdout_truncation=size > wanted,
+        untrusted_root=untrusted_root,
     )
     if len(stdout) != wanted:
         detail = stderr.decode("utf-8", errors="replace").strip()
@@ -323,7 +352,7 @@ def _public_repository_identifier(remote: str) -> str:
     return path.name or "repository"
 
 
-def _git_executable(root: Path) -> str:
+def _git_executable(untrusted_root: Path) -> str:
     path = os.environ.get("PATH", os.defpath)
     executable = shutil.which("git", path=path)
     if not executable:
@@ -332,17 +361,19 @@ def _git_executable(root: Path) -> str:
     if not resolved.is_file():
         raise GitError(f"git executable is not a regular file: {resolved}")
     try:
-        resolved.relative_to(root.resolve())
+        resolved.relative_to(untrusted_root.resolve())
     except ValueError:
         pass
     else:
-        raise GitError("git executable resolved inside the untrusted repository")
+        raise GitError("git executable resolved inside the declared untrusted root")
     return os.fspath(resolved)
 
 
-def _git_command(root: Path, *args: str) -> list[str]:
+def _git_command(
+    root: Path, *args: str, untrusted_root: Path | None = None
+) -> list[str]:
     return [
-        _git_executable(root),
+        _git_executable(untrusted_root or root),
         "-c",
         f"core.hooksPath={os.devnull}",
         "-c",
@@ -391,6 +422,8 @@ def _git_environment(home: Path | None = None) -> dict[str, str]:
             "GIT_OPTIONAL_LOCKS": "0",
             "GIT_PAGER": "cat",
             "PAGER": "cat",
+            "LC_ALL": "C",
+            "LANG": "C",
         }
     )
     return environment
@@ -445,7 +478,11 @@ def _validate_snapshot_path(name: str) -> PurePosixPath:
     if len(name.encode("utf-8")) > 4096:
         raise GitError("snapshot path exceeds the portable length limit")
     relative = PurePosixPath(name)
-    if relative.is_absolute() or any(part in {"", ".", ".."} for part in relative.parts):
+    if (
+        relative.is_absolute()
+        or relative.as_posix() != name
+        or any(part in {"", ".", ".."} for part in relative.parts)
+    ):
         raise GitError(f"snapshot path escapes the snapshot root: {name}")
     for part in relative.parts:
         _validate_portable_component(part, name)
@@ -576,6 +613,7 @@ def _run_git_bounded(
     stdout_limit: int,
     stderr_limit: int,
     allow_stdout_truncation: bool = False,
+    untrusted_root: Path | None = None,
 ) -> tuple[bytes, bytes, int]:
     if stdout_limit < 0 or stderr_limit < 0:
         raise ValueError("Git output limits must be non-negative")
@@ -586,7 +624,7 @@ def _run_git_bounded(
         else:
             popen_options["start_new_session"] = True
         process = subprocess.Popen(
-            _git_command(root, *args),
+            _git_command(root, *args, untrusted_root=untrusted_root),
             cwd=root,
             env=_git_environment(Path(home_raw)),
             stdin=subprocess.DEVNULL,

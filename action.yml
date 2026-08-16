@@ -102,4 +102,23 @@ runs:
         PYTHONHOME: ""
         PYTHONSTARTUP: ""
         PYTHONUSERBASE: ""
-      run: python -I -S scripts/action_entry.py
+      run: |
+        set -euo pipefail
+        : "${pythonLocation:?PatchLab requires actions/setup-python before this action}"
+        python_root="$pythonLocation"
+        workspace_root="$GITHUB_WORKSPACE"
+        if [ "${RUNNER_OS:-}" = "Windows" ]; then
+          python_root="${python_root//\\//}"
+          workspace_root="${workspace_root//\\//}"
+          python_executable="$python_root/python.exe"
+        else
+          python_executable="$python_root/bin/python"
+        fi
+        case "$python_executable" in
+          "$workspace_root"/*)
+            echo "PatchLab refuses Python from GITHUB_WORKSPACE" >&2
+            exit 1
+            ;;
+        esac
+        test -x "$python_executable"
+        "$python_executable" -I -S scripts/action_entry.py

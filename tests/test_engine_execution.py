@@ -24,6 +24,28 @@ class EngineExecutionTests(unittest.TestCase):
         head = commit_all(repo, "head")
         return repo, base, head
 
+    def test_workspace_trust_boundary_reaches_git_and_executor_selection(self) -> None:
+        repo, base, head = self._repo(
+            """[project]\nname = \"boundary\"\n[execution]\nmode = \"static\"\n[scope]\nallow = [\"**\"]\n[policy]\n[[commands]]\nname = \"test\"\ncommand = [\"python\", \"-V\"]\n"""
+        )
+        workspace = repo.parent.resolve()
+        selected = ExecutorSelection(mode="static")
+        with patch(
+            "patchlab_commons.engine.select_executor", return_value=selected
+        ) as selector:
+            VerificationEngine().verify(
+                VerificationRequest(
+                    repo,
+                    Path("patchlab.toml"),
+                    base,
+                    head,
+                    Path("out"),
+                    untrusted_root=workspace,
+                )
+            )
+        selector.assert_called_once()
+        self.assertEqual(selector.call_args.kwargs["untrusted_root"], workspace)
+
     def test_static_mode_reports_commands_as_unexecuted(self) -> None:
         repo, base, head = self._repo(
             """[project]\nname = \"static\"\n[execution]\nmode = \"static\"\n[scope]\nallow = [\"**\"]\n[policy]\n[[commands]]\nname = \"test\"\ncommand = [\"python\", \"-V\"]\n"""
