@@ -124,17 +124,19 @@ This table uses public workflow, release, and documentation endpoints rather tha
 | Evidence | Status | Link or value |
 |---|---|---|
 | Public repository | PUBLISHED | https://github.com/xordanblu/patchlab-commons |
-| Final commit | VERIFIED BY ANNOTATED RELEASE TAG | https://github.com/xordanblu/patchlab-commons/releases/tag/v0.2.0 |
+| Tagged release commit | VERIFIED AS `017f427cc65af22b0de2bcf3b5b5d10daaab8812` | https://github.com/xordanblu/patchlab-commons/commit/017f427cc65af22b0de2bcf3b5b5d10daaab8812 |
 | GitHub release | PUBLISHED FROM THE TAGGED COMMIT | https://github.com/xordanblu/patchlab-commons/releases/tag/v0.2.0 |
-| CI matrix | VERIFIED ON PYTHON 3.11–3.14 ACROSS DECLARED HOSTS | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
-| Required CI check | VERIFIED | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
-| CodeQL | VERIFIED WITH `security-extended` QUERIES | https://github.com/xordanblu/patchlab-commons/actions/workflows/codeql.yml |
-| Action module-hijack E2E | VERIFIED AS `Composite action resists Python module hijacking` | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
-| Linux container E2E | VERIFIED AS `Real Linux container isolation` | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
-| Pages | PUBLISHED | https://xordanblu.github.io/patchlab-commons/ |
+| Release workflow | VERIFIED BUILD, CLEAN INSTALLS, ATTESTATIONS, AND PUBLICATION | https://github.com/xordanblu/patchlab-commons/actions/runs/31976206404 |
+| Post-publication verification | VERIFIED EXACT ASSET SET, HASHES, ATTESTATIONS, INSTALLS, BUNDLE, AND TAGS | https://github.com/xordanblu/patchlab-commons/actions/runs/31976286726 |
+| CI matrix | VERIFIED ON PYTHON 3.11–3.14 ACROSS DECLARED HOSTS | https://github.com/xordanblu/patchlab-commons/actions/runs/31976648846 |
+| Required CI check | VERIFIED | https://github.com/xordanblu/patchlab-commons/actions/runs/31976648846/job/95237192077 |
+| CodeQL | VERIFIED WITH `security-extended` QUERIES | https://github.com/xordanblu/patchlab-commons/actions/runs/31976648995 |
+| Action module-hijack E2E | VERIFIED AS `Composite action resists Python module hijacking` | https://github.com/xordanblu/patchlab-commons/actions/runs/31976648846/job/95237043006 |
+| Linux container E2E | VERIFIED AS `Real Linux container isolation` | https://github.com/xordanblu/patchlab-commons/actions/runs/31976648846/job/95237042955 |
+| Pages | PUBLISHED FROM `main` | https://github.com/xordanblu/patchlab-commons/actions/runs/31976647634 |
 | PyPI | NOT PUBLISHED; NOT REQUIRED FOR THE GITHUB RELEASE | — |
-| Tests | 222 DISCOVERED TESTS | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
-| Combined line and branch coverage | 90.10%; 91.97% statements and 85.00% branches | https://github.com/xordanblu/patchlab-commons/actions/workflows/ci.yml |
+| Tests | 222 ON THE TAGGED RELEASE; 223 ON CURRENT `main` AFTER THE RELEASE-WORKFLOW REGRESSION TEST | https://github.com/xordanblu/patchlab-commons/actions/runs/31976206404 and https://github.com/xordanblu/patchlab-commons/actions/runs/31976648846 |
+| Combined line and branch coverage | 90.10%; 91.97% statements and 85.00% branches | https://github.com/xordanblu/patchlab-commons/actions/runs/31976648846 |
 | External repositories | 0 verified at preparation time | — |
 | External contributors | 0 verified at preparation time | — |
 | Upstream-accepted fixes using PatchLab | 0 verified at preparation time | — |
