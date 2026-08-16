@@ -1,9 +1,22 @@
 * @xordanblu
 
-# Policy and automation need an explicit maintainer review.
+# Policy, execution, evidence, and automation require explicit maintainer review.
+/.github/CODEOWNERS @xordanblu
+/.github/workflows/ @xordanblu
 /patchlab.toml @xordanblu
 /action.yml @xordanblu
-/.github/workflows/ @xordanblu
-/src/patchlab/checks/ @xordanblu
-/src/patchlab/passport.py @xordanblu
-/src/patchlab/runner.py @xordanblu
+/AGENTS.md @xordanblu
+/requirements-*.txt @xordanblu
+/src/patchlab_commons/config.py @xordanblu
+/src/patchlab_commons/engine.py @xordanblu
+/src/patchlab_commons/gitutils.py @xordanblu
+/src/patchlab_commons/passport.py @xordanblu
+/src/patchlab_commons/runner.py @xordanblu
+/scripts/action_entry.py @xordanblu
+/scripts/build_release_assets.py @xordanblu
+/scripts/check_action_pins.py @xordanblu
+/scripts/check_release.py @xordanblu
+/scripts/generate_sbom.py @xordanblu
+/docs/THREAT_MODEL.md @xordanblu
+/docs/RELEASING.md @xordanblu
+/SECURITY.md @xordanblu

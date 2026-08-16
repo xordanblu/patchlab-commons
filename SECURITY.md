@@ -5,23 +5,23 @@
 | Version | Security fixes |
 |---|---|
 | `main` | Yes |
-| latest tagged release | Yes |
-| older alpha releases | Best effort |
+| `0.2.x` | Yes |
+| `0.1.0` | No. Historical provenance only. Do not use its action for untrusted pull requests. |
 
 ## Report a vulnerability
 
 Do not open a public issue for an unpatched vulnerability.
 
-Use GitHub private vulnerability reporting when it is enabled for the repository. Include:
+Use GitHub private vulnerability reporting when enabled. Include:
 
 - affected version or commit;
-- operating system and Python version;
-- minimal reproduction;
-- security impact;
-- files and functions involved;
-- suggested correction, when available.
+- operating system, Python version, and execution mode;
+- minimal reproduction with synthetic data;
+- attacker capability and security impact;
+- affected files and functions;
+- suggested correction when available.
 
-Do not include real credentials or third-party private data.
+Do not include real credentials, private third-party data, or active exploit traffic.
 
 ## Response targets
 
@@ -33,20 +33,24 @@ The maintainers aim to:
 
 These are targets, not contractual guarantees.
 
-## Scope
+## High-value scope
 
-High-value areas include:
+- action bootstrap importing code from the caller repository;
+- container escape from documented controls;
+- silent fallback to native execution;
+- host file, secret, network, or container-socket exposure;
+- Git environment or object redirection;
+- snapshot path, symbolic-link, gitlink, or size-limit bypass;
+- output path or archive traversal;
+- Patch Passport digest, identity, or member validation bypass;
+- verification of the wrong commits or policy;
+- evidence written or replaced by untrusted command code;
+- release or action supply-chain compromise.
 
-- command execution escaping the documented boundary;
-- credential leakage from environment sanitization;
-- unsafe archive handling;
-- digest verification bypass;
-- Git ref confusion that validates the wrong commits;
-- SARIF or Markdown injection with security impact;
-- path traversal in output or bundle processing.
-
-False positives, missing heuristic detections, and documentation errors are normally regular bugs unless they create a concrete security boundary bypass.
+A missing heuristic detection is normally a regular bug unless it bypasses a documented security invariant.
 
 ## Safe testing
 
-Use repositories and systems you own or have permission to test. Use synthetic credentials. Do not test against unrelated production systems.
+Use repositories and systems you own or have written permission to test. Use synthetic credentials. Do not test unrelated production systems.
+
+Container mode is designed for hostile repository code, but it is not a virtual-machine boundary. Do not test kernel or container-runtime exploits through the public project workflow.

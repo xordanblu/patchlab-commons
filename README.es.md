@@ -4,52 +4,53 @@
 
 <p align="center">
   <strong>Verificación con evidencia para cambios de software.</strong><br>
-  Compara dos revisiones de Git. Ejecuta controles confiables. Detecta riesgos. Crea un Patch Passport portátil.
+  Compara dos revisiones de Git. Revisa capacidades nuevas. Ejecuta controles limitados. Crea un Patch Passport portátil.
 </p>
 
 <p align="center">
   <a href="README.md">English</a> ·
   <a href="docs/ARCHITECTURE.md">Arquitectura</a> ·
+  <a href="docs/GITHUB_ACTION.md">GitHub Action</a> ·
   <a href="docs/PATCH_PASSPORT_SPEC.md">Especificación</a> ·
   <a href="docs/THREAT_MODEL.md">Modelo de amenazas</a> ·
   <a href="SECURITY.md">Seguridad</a>
 </p>
 
-> **Estado:** `0.1.0-alpha`. El flujo principal funciona y tiene pruebas. PatchLab registra evidencia. No demuestra por sí solo que un cambio sea correcto. Tampoco sustituye la revisión humana.
+> **Estado:** `0.2.0` Alpha. El flujo principal funciona y tiene pruebas. PatchLab registra evidencia. No demuestra que un cambio sea correcto, completo o libre de vulnerabilidades. La revisión humana sigue siendo obligatoria.
 
-## Por qué existe
+## Por qué existe PatchLab
 
 Una solicitud de cambios puede verse correcta y seguir siendo insegura.
 
-La misma persona o el mismo agente puede escribir el cambio, agregar una prueba débil y declarar que todo funciona. Un diff normal tampoco responde con claridad estas preguntas:
+La misma persona o el mismo agente puede escribir el cambio, agregar una prueba débil y declarar que todo funciona. Un diff de líneas tampoco responde preguntas importantes:
 
-- ¿El error existía antes del cambio?
+- ¿El defecto existía antes del cambio?
 - ¿La misma reproducción pasa después del cambio?
 - ¿Se eliminaron, omitieron o debilitaron pruebas?
-- ¿El cambio agregó permisos, red, secretos, binarios o dependencias?
-- ¿Qué commits y qué política produjeron el resultado?
+- ¿El cambio agregó permisos de escritura, red, secretos, binarios o dependencias?
+- ¿Qué commits, política y límite de ejecución produjeron el resultado?
 
-PatchLab registra las respuestas como evidencia revisable.
+PatchLab registra esas respuestas como evidencia que un mantenedor puede revisar.
 
-## Qué produce
+## Qué produce PatchLab
 
 ```text
 .patchlab/out/
-├── report.json                     fuente principal para máquinas
-├── report.md                       resumen para mantenedores
+├── report.json                     fuente legible por programas
+├── report.md                       resumen para el mantenedor
 ├── results.sarif                   hallazgos SARIF 2.1.0
-├── passport.json                   manifiesto de integridad
-├── patchlab-passport.tar.gz        paquete portátil
-└── patchlab-passport.tar.gz.sha256 valor SHA-256 externo
+├── passport.json                   identidad y manifiesto de artefactos
+├── patchlab-passport.tar.gz        paquete portátil de evidencia
+└── patchlab-passport.tar.gz.sha256 valor externo de integridad
 ```
 
-Un **Patch Passport** une los commits, la política confiable, los comandos, los hallazgos, los tamaños y las huellas SHA-256.
+Un **Patch Passport** une los commits, la política confiable, el límite de ejecución, los comandos, los hallazgos, los tamaños y las huellas SHA-256 en un archivo limitado.
 
 ## Capacidades principales
 
-### Reproduce antes y después
+### Reproducir antes y después
 
-Un comando puede estar obligado a fallar en la revisión base y pasar en la revisión nueva.
+Un comando puede exigir que el defecto falle en la revisión base y pase en la revisión candidata.
 
 ```toml
 [[commands]]
@@ -61,59 +62,78 @@ timeout_seconds = 120
 required = true
 ```
 
-### Ejecuta una verificación independiente
+### Mantener la política independiente
 
-PatchLab puede ejecutar pruebas, compilaciones y scripts definidos por la política de la revisión base.
+En una solicitud de cambios, PatchLab carga `patchlab.toml` desde la **revisión base**. El candidato no puede reemplazar en silencio la política que lo evalúa.
 
-Los comandos son arreglos de argumentos. PatchLab no inicia un intérprete de comandos.
+PatchLab crea las copias desde los objetos de árbol y archivo de Git. No usa filtros de checkout, hooks, worktrees ni `git archive`. Una regla `export-ignore` controlada por el candidato no puede quitar archivos de la copia ejecutada.
 
-### Detecta riesgos
+### Detectar riesgos de revisión
 
-Las reglas actuales revisan:
+Las reglas deterministas revisan:
 
 - archivos y líneas fuera del alcance permitido;
-- dependencias y archivos de bloqueo;
-- cambios en GitHub Actions;
+- manifiestos y archivos de bloqueo de dependencias;
+- cambios de GitHub Actions;
 - permisos de escritura y `pull_request_target`;
 - credenciales persistentes del checkout;
 - acciones externas sin commit fijo;
-- scripts remotos ejecutados de forma directa;
-- archivos sensibles y posibles credenciales escritas en código;
+- scripts descargados y ejecutados directamente;
+- archivos sensibles y posibles credenciales escritas en el código;
 - posible impresión de secretos;
-- clientes de red y direcciones nuevas;
-- pruebas eliminadas y aserciones removidas;
-- omisiones, fallos esperados y ocultamiento de errores;
+- clientes y direcciones nuevas de red;
+- pruebas eliminadas, aserciones removidas, omisiones y silenciamiento de fallos;
 - archivos binarios o generados;
-- intentos de debilitar `patchlab.toml` dentro del mismo cambio;
-- diferencias entre los archivos reportados por Git y la evidencia que pudo analizar PatchLab.
+- intentos de debilitar `patchlab.toml`;
+- diferencias entre los metadatos de Git y el diff interpretado.
 
-Una **aserción** es una condición que una prueba exige como verdadera.
+### Elegir un límite de ejecución
 
-### Crea evidencia verificable
+PatchLab tiene estos modos:
 
-El paquete normaliza el orden, las fechas, el propietario, los permisos y la compresión. El verificador rechaza archivos inesperados, nombres duplicados, rutas inseguras, huellas inválidas y contenido demasiado grande.
+| Modo | Ejecuta código del proyecto | Uso |
+|---|---:|---|
+| `static` | No | Predeterminado. Revisa cambios sin ejecutar código candidato. |
+| `container` | Sí | Linux con Docker o Podman y una imagen fija. |
+| `auto` | Cuando existe un proveedor aislado | Falla de forma segura si necesita comandos y no hay aislamiento. |
+| `native` | Sí | Solo código local confiable. Requiere aceptación explícita. |
 
-PatchLab publica esquemas JSON estrictos para `report.json` y `passport.json`.
+El modo contenedor usa un usuario sin privilegios, raíz de solo lectura, código de solo lectura, capacidades Linux eliminadas, `no-new-privileges`, red bloqueada por defecto y límites de CPU, memoria, procesos, tiempo, salida y espacio temporal.
 
-## Inicio local
+Este modo reduce el acceso directo al host. No equivale a una máquina virtual. El contenedor comparte el kernel del host.
 
-PatchLab necesita Python 3.11 o posterior y Git.
+El modo nativo es un límite débil. No impide que el código lea archivos del usuario, use la red o ataque el host. No lo uses con solicitudes de cambios desconocidas.
+
+## Instalación
+
+PatchLab requiere Python 3.11 a 3.14 y Git.
+
+Desde el código fuente:
 
 ```bash
-git clone https://github.com/xordanblu/patchlab-commons.git
-cd patchlab-commons
-python -m pip install -e .
+python -I -m pip install --no-deps .
 patchlab --version
 patchlab doctor
 ```
 
-Crea una configuración y un flujo de GitHub de solo lectura:
+Para desarrollar:
+
+```bash
+python -I -m pip install -r requirements-dev.txt -e .
+make verify
+```
+
+El paquete de ejecución no declara dependencias externas de Python.
+
+## Inicio local
+
+Crea una configuración y un workflow de GitHub de solo lectura:
 
 ```bash
 patchlab init
 ```
 
-Compara dos commits:
+La revisión estática no ejecuta código:
 
 ```bash
 patchlab verify \
@@ -121,8 +141,26 @@ patchlab verify \
   --head HEAD \
   --config patchlab.toml \
   --config-source base \
+  --execution-mode static \
   --output .patchlab/out
 ```
+
+Ejecuta los comandos dentro de un contenedor aislado en Linux:
+
+```bash
+patchlab verify \
+  --base HEAD~1 \
+  --head HEAD \
+  --config patchlab.toml \
+  --config-source base \
+  --execution-mode container \
+  --container-runtime docker \
+  --container-image 'python@sha256:<huella-de-64-caracteres>' \
+  --no-network \
+  --output .patchlab/out
+```
+
+La imagen debe usar una huella del registro o un ID local inmutable.
 
 Verifica un paquete recibido:
 
@@ -130,33 +168,22 @@ Verifica un paquete recibido:
 patchlab verify-passport .patchlab/out/patchlab-passport.tar.gz
 ```
 
-## Dos demostraciones completas
-
-Una corrección válida debe pasar:
-
-```bash
-python scripts/run_demo.py --output .patchlab/demo
-```
-
-Un flujo con privilegios debe fallar y producir evidencia válida:
-
-```bash
-python scripts/run_attack_demo.py --output .patchlab/blocked-demo
-```
-
-La demostración bloqueada detecta escritura, `pull_request_target`, credenciales persistentes, una acción sin commit fijo, ejecución remota y acceso nuevo a red.
-
-Los resultados listos para revisar están en [`examples/sample-passport`](examples/sample-passport) y [`examples/blocked-passport`](examples/blocked-passport).
-
 ## Configuración
-
-En una solicitud de cambios, PatchLab carga `patchlab.toml` desde la **revisión base**. El candidato no puede reemplazar en silencio la política que lo evalúa.
-
-Para la primera instalación, integra `patchlab.toml` en la rama principal antes de activar el flujo de pull requests. Las siguientes ejecuciones podrán usar la política confiable de la revisión base.
 
 ```toml
 [project]
 name = "example-project"
+
+[execution]
+mode = "static"
+container_runtime = "auto"
+container_image = ""
+network = false
+memory_mb = 1024
+cpus = 1.0
+pids_limit = 128
+tmpfs_mb = 64
+allow_unsafe_native = false
 
 [scope]
 allow = ["src/**", "tests/**", "pyproject.toml", ".github/workflows/**"]
@@ -177,26 +204,18 @@ generated_files = "review"
 fail_on_review = false
 require_clean_worktree = false
 require_human_review = true
-
-[[commands]]
-name = "tests"
-command = ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
-run_on = "head"
-expected_exit = "zero"
-timeout_seconds = 300
-required = true
 ```
 
-Las decisiones son `allow`, `review` o `deny`.
-
-PatchLab rechaza claves desconocidas. Un error de escritura no puede activar un valor más débil en silencio.
+Las decisiones son `allow`, `review` o `deny`. PatchLab rechaza claves desconocidas. Un error de escritura no puede elegir un valor más débil en silencio.
 
 Consulta [`docs/RULES.md`](docs/RULES.md) y [`examples/patchlab.toml`](examples/patchlab.toml).
 
-## Acción de GitHub
+## GitHub Action
+
+Usa una acción publicada o un checkout confiable separado. No uses `uses: ./` desde el repositorio candidato para revisar una solicitud no confiable.
 
 ```yaml
-- uses: xordanblu/patchlab-commons@v0.1.0
+- uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5
   id: patchlab
   with:
     base: ${{ github.event.pull_request.base.sha }}
@@ -204,80 +223,81 @@ Consulta [`docs/RULES.md`](docs/RULES.md) y [`examples/patchlab.toml`](examples/
     repository: .
     config: patchlab.toml
     config-source: base
+    execution-mode: static
     output: .patchlab/out
     fail-on-review: "true"
 ```
 
-El checkout necesita todo el historial. No debe guardar credenciales:
+El ejemplo fija la implementación endurecida a un SHA completo. Revisa ese commit antes de usarlo.
+
+El workflow debe usar `pull_request`, permisos de solo lectura, historial completo y credenciales no persistentes. No debe entregar secretos al código candidato.
 
 ```yaml
-- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+permissions:
+  contents: read
+
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     fetch-depth: 0
     persist-credentials: false
 ```
 
-La acción agrega `report.md` al resumen del trabajo. También expone las rutas, el resultado, el código de salida y la huella del paquete.
-
 Consulta [`examples/github-action.yml`](examples/github-action.yml) y [`docs/GITHUB_ACTION.md`](docs/GITHUB_ACTION.md).
+
+## Demostraciones
+
+Una corrección válida debe pasar:
+
+```bash
+python -I scripts/run_demo.py --output .patchlab/demo
+patchlab verify-passport .patchlab/demo/patchlab-passport.tar.gz
+```
+
+Un workflow con privilegios debe fallar y producir evidencia válida:
+
+```bash
+python -I scripts/run_attack_demo.py --output .patchlab/blocked-demo
+patchlab verify-passport .patchlab/blocked-demo/patchlab-passport.tar.gz
+```
+
+Los resultados listos para revisar están en [`examples/sample-passport`](examples/sample-passport) y [`examples/blocked-passport`](examples/blocked-passport).
 
 ## Límite de seguridad
 
-PatchLab reduce las variables de entorno heredadas. Cada comando usa un directorio personal y temporal desechable. PatchLab elimina configuraciones normales del usuario, cierra la entrada estándar, limita la salida, oculta formas comunes de credenciales, aplica tiempos máximos y termina el grupo de procesos cuando el sistema lo permite.
+PatchLab protege el coordinador contra formas comunes de sustitución de módulos Python y variables hostiles de Git. La acción inicia Python en modo aislado y sin `site`. Solo importa el código incluido con la acción. No ejecuta `pip` durante el arranque.
 
-PatchLab también desactiva hooks de Git, monitores de archivos, programas externos de diff, filtros de texto, configuración global, solicitudes interactivas y paginadores durante la inspección.
+Git usa un entorno mínimo y no interactivo. Las copias tienen límites de archivos, tamaño, rutas, modos y enlaces simbólicos.
 
-Los comandos configurados todavía ejecutan código del proyecto. Los árboles de Git separan revisiones. **No forman un aislamiento completo del sistema operativo.**
+El coordinador confiable escribe y verifica la evidencia final fuera del contenedor no confiable.
 
-Usa trabajadores desechables. Usa un contenedor o una máquina virtual cuando el código no sea confiable. No expongas secretos a una revisión de pull request.
+Lee [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) y [`SECURITY.md`](SECURITY.md) antes de usar PatchLab en una revisión sensible.
 
-Las rutas de salida no pueden escapar del repositorio ni seguir enlaces simbólicos. La verificación del paquete es de solo lectura y tiene límites de tamaño.
+## Desarrollo y validación
 
-Lee [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md).
+```bash
+make compile
+make test
+make coverage
+make demos
+make checks
+```
+
+El CI está configurado para Python 3.11, 3.12, 3.13 y 3.14 en Linux, macOS y Windows. Otros trabajos revisan cobertura, paquetes, resistencia del arranque de la acción, aislamiento real en Linux, demostraciones y CodeQL.
+
+Un control remoto solo es autoritativo cuando se ejecuta en GitHub. [`docs/VALIDATION.md`](docs/VALIDATION.md) separa la evidencia local de la evidencia remota.
 
 ## Principios
 
-1. La evidencia va antes que la confianza.
-2. El cambio no define su propia aprobación.
-3. La verificación normal usa permisos de solo lectura.
-4. Las decisiones principales no necesitan un modelo de IA.
-5. El mantenedor conserva la decisión final.
-6. La evidencia funciona fuera de una sola plataforma.
-7. La documentación principal existe en español e inglés.
-8. El impacto se demuestra con uso real. No con métricas compradas.
-
-## Desarrollo
-
-```bash
-python -m pip install -e ".[dev]"
-make compile
-make coverage
-make demo
-make attack-demo
-make build
-```
-
-El paquete normal no usa dependencias externas de Python.
-
-CI prueba Python 3.11, 3.12 y 3.13 en Linux, macOS y Windows. También construye el paquete, mide cobertura, ejecuta las dos demostraciones y usa CodeQL.
-
-## Documentos
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/PATCH_PASSPORT_SPEC.md`](docs/PATCH_PASSPORT_SPEC.md)
-- [`docs/report.schema.json`](docs/report.schema.json)
-- [`docs/passport.schema.json`](docs/passport.schema.json)
-- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
-- [`docs/RULES.md`](docs/RULES.md)
-- [`docs/ROADMAP.md`](docs/ROADMAP.md)
-- [`docs/IMPACT.md`](docs/IMPACT.md)
-- [`docs/VALIDATION.md`](docs/VALIDATION.md)
-- [`GOVERNANCE.md`](GOVERNANCE.md)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-- [`SUPPORT.md`](SUPPORT.md)
-- [`docs/RELEASING.md`](docs/RELEASING.md)
+1. **Evidencia antes que confianza.** Una afirmación no es una prueba.
+2. **Política independiente.** El cambio no define su propia aprobación.
+3. **Fallo seguro.** La falta de aislamiento no se convierte en ejecución nativa.
+4. **Permisos mínimos.** La revisión normal usa acceso de solo lectura.
+5. **Decisiones deterministas.** La lógica principal no necesita un modelo de IA.
+6. **Autoridad humana.** El mantenedor conserva la decisión final.
+7. **Registros portátiles.** La evidencia funciona fuera de una sola plataforma.
+8. **Acceso bilingüe.** La documentación principal existe en inglés y español.
+9. **Sin adopción falsa.** El impacto requiere uso comprobado.
 
 ## Licencia
 
-Apache License 2.0. Consulta [`LICENSE`](LICENSE) y [`NOTICE`](NOTICE).
+Apache License 2.0. Consulta [`LICENSE`](LICENSE).

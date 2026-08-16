@@ -1,146 +1,132 @@
 # Threat model
 
-## Security claim
+## Security objective
 
-PatchLab protects the integrity and reviewability of patch evidence.
+PatchLab must preserve the identity, integrity, and reviewability of evidence for one base-to-head comparison.
 
-It does not contain arbitrary hostile code by itself. Configured commands execute project code. Use an operating-system sandbox when that code is untrusted.
+It must fail closed when it cannot provide the execution boundary requested by trusted policy.
+
+## Actors
+
+### Maintainer
+
+Controls the base branch, trusted policy, workflow, release process, and final review decision.
+
+### Contributor or coding agent
+
+Can control the candidate commit, file names, file content, Git metadata reachable from that commit, command behavior, and command output.
+
+### Dependency or action publisher
+
+Can affect downloaded tools when references are mutable or package resolution is not fixed.
+
+### CI platform
+
+Provides the runner, token, event payload, action checkout, and artifact service. PatchLab does not defend against a fully compromised CI platform or host kernel.
 
 ## Assets
 
-Important assets include:
-
-- selected base and candidate commit identities;
-- the trusted policy and its SHA-256 digest;
+- selected base and head commit IDs;
+- trusted policy bytes and digest;
+- coordinator code;
+- host credentials and files;
+- command boundary configuration;
 - command results;
-- rule findings;
-- report bytes;
-- bundle digests;
-- CI credentials and environment variables;
-- host files reachable by executed code;
-- maintainer attention and approval.
+- reports and Patch Passport bytes;
+- release artifacts and provenance;
+- repository settings and version tags.
 
 ## Trust boundaries
 
-### Repository content
+### Candidate repository to coordinator
 
-Files, branch names, commit messages, tests, package metadata, and candidate code can be untrusted.
+All repository content is untrusted data. It cannot become executable coordinator code through imports, Python customization modules, Git configuration, hooks, filters, action inputs, or file names.
 
-PatchLab loads `patchlab.toml` from the base revision by default. A change to the policy is also reported as `PL-POLICY-001`.
+### Coordinator to command executor
 
-### Command execution
+The coordinator may pass only the selected snapshot, explicit command arguments, approved environment names, and bounded resource settings.
 
-Commands come from trusted policy. The programs they start can execute code from either compared revision.
+### Command executor to host
 
-PatchLab applies these controls:
+The isolated provider must not expose host secrets, arbitrary host paths, container sockets, writeable source mounts, or network access unless trusted policy explicitly enables the latter.
 
-- no shell invocation;
-- standard input closed;
-- reduced environment;
-- disposable `HOME` and temporary directory;
-- user Python site disabled;
-- normal Git, pip, npm, and XDG user configuration redirected or disabled;
-- common credential forms redacted from stored output;
-- output captured through temporary files instead of unbounded memory;
-- stored output bounded with both beginning and end retained;
-- per-command timeout;
-- process-group termination on POSIX and process-tree termination attempt on Windows.
+### Generated evidence to verifier
 
-Remaining risk:
+The verifier treats archive names, sizes, types, JSON, and digests as untrusted until every rule passes.
 
-- project code can access the host filesystem allowed by the operating system;
-- project code can use the network;
-- project code can consume CPU, memory, processes, or disk before the host stops it;
-- explicitly allowed environment variables can contain secrets;
-- readable credential files outside the disposable home can still be reached;
-- platform process-tree termination can have edge cases.
+### Release workflow to registries
 
-Use disposable CI workers. Use containers or virtual machines for hostile code.
+Only the dedicated release jobs can request write or OIDC permissions. Build and test jobs remain read-only.
 
-### Git inspection
+## Attacker capabilities
 
-A repository can contain hooks, text conversion filters, and file-system monitor settings that start external programs during normal Git commands.
+A contributor can attempt to:
 
-PatchLab invokes Git with repository hooks disabled. It disables the file-system monitor, global and system Git configuration, terminal prompts, and pagers. Unified diffs also disable external diff drivers and text conversion filters. Git output is written to temporary files and rejected when it exceeds a fixed safety limit.
+- add `pip`, `patchlab_commons`, `sitecustomize`, `usercustomize`, or standard-library lookalikes;
+- change `PYTHONPATH`, `PYTHONHOME`, or user-site behavior;
+- set hostile Git process variables;
+- add hooks, filters, attributes, symlinks, gitlinks, large files, odd paths, and `export-ignore` rules;
+- create unlimited output or descendant processes;
+- use the network;
+- read host files or sockets;
+- write fake reports before the trusted coordinator finishes;
+- weaken tests or policy;
+- inject Markdown, SARIF, JSON, or workflow content;
+- replace mutable GitHub Actions or dependencies.
 
-Remaining risk:
+## Required invariants
 
-- the Git binary and operating system remain trusted components;
-- a hostile repository can still consume resources through large object graphs;
-- PatchLab does not fetch remote objects or verify the identity of the repository owner.
+1. The trusted base policy determines the decision unless the maintainer explicitly selects another source.
+2. Base and head resolve to exact commit object IDs.
+3. Candidate files cannot change the Python code imported by the action bootstrap.
+4. Candidate Git settings cannot redirect Git operations.
+5. Dynamic code never runs natively without explicit consent.
+6. Container mode never degrades silently to native mode.
+7. Network is disabled unless trusted policy enables it.
+8. Candidate code cannot write the source snapshot or evidence directory in container mode.
+9. Candidate code cannot access a container-management socket.
+10. Output, time, memory, CPU, PID, file-count, and byte limits remain bounded.
+11. The trusted coordinator creates the final reports and bundle.
+12. A verifier rejects unexpected, duplicate, unsafe, oversized, malformed, or digest-mismatched members.
+13. External GitHub Actions use immutable full commit SHAs.
+14. Existing release tags are never moved.
 
-### GitHub Actions
+## Main mitigations
 
-Pull-request metadata and content are untrusted.
-
-The recommended workflow uses:
-
-- `pull_request`;
-- read-only contents;
-- no persisted checkout credentials;
-- no repository secrets;
-- exact commit pins for third-party actions;
-- a job timeout.
-
-### Output path
-
-A repository can contain symbolic links.
-
-Relative PatchLab output must stay under the repository root. Existing components under that root cannot be symbolic links. Existing output files cannot be symbolic links or non-file objects. Writes use temporary regular files and atomic replacement.
-
-### Evidence bundle
-
-A bundle can come from an untrusted source.
-
-The verifier:
-
-- reads only regular files;
-- requires the exact version 1 member set;
-- rejects duplicates and unsafe paths;
-- limits compressed, per-member, and total uncompressed size;
-- validates identity and verification metadata types;
-- validates SHA-256 syntax and byte-size types;
-- recalculates every artifact digest from exact bytes.
-
-## Threats and controls
-
-| Threat | Current control | Remaining risk |
+| Threat | Mitigation | Remaining limit |
 |---|---|---|
-| Wrong refs verified | full commit resolution and report identity | workflow can supply the wrong refs |
-| Same commit used twice | deny finding | none inside one report |
-| Policy self-modification | base-revision policy, digest, visible finding | maintainer can approve a bad base policy |
-| Git hook or text-filter execution | hooks, fsmonitor, external diff, and text conversion disabled | trusted Git binary and host remain in scope |
-| Shell injection | argument arrays; no shell | called program can interpret arguments |
-| Inherited secrets | minimal environment and disposable home | readable files or explicitly allowed variables |
-| Output memory exhaustion | temporary-file capture and bounded retained text | disk can still be exhausted |
-| Long-running commands | timeout and process-tree termination | platform-specific child escape |
-| Secret text in output | common-pattern redaction | unknown formats can remain |
-| Test weakening | deletion, assertion, skip, and suppression rules | semantic weakening can evade patterns |
-| Workflow privilege increase | permission, trigger, credential, pin, and script rules | complex YAML semantics can evade line rules |
-| Markdown injection | dynamic values use escaped text or safe code spans | rendering platform differences |
-| Remote credential leak | repository URL credentials and local parents removed | unusual remote syntax can evade normalization |
-| Output redirection | parent traversal and symbolic links rejected | privileged local race outside normal use |
-| Archive traversal | exact member set and path checks | decompression still consumes bounded resources |
-| Digest bypass | strict SHA-256 and exact byte-size comparison | digest does not prove creator identity |
+| Python module replacement | isolated/no-site action entry and trusted source path | a malicious caller workflow can remove the action entirely |
+| Git environment injection | minimal environment and fixed `git -c` controls | a compromised Git binary remains trusted |
+| checkout/export filters | direct tree and blob materialization | unsupported gitlinks are rejected, not executed |
+| host file access | isolated container with minimal read-only mount | containers share the host kernel |
+| network exfiltration | `--network none` by default | explicit network mode weakens reproducibility and needs review |
+| fork/process exhaustion | PID, CPU, memory, and timeout limits | platform enforcement depends on Docker/Podman and the host kernel |
+| disk/output exhaustion | read-only root, bounded tmpfs, bounded captured output | container runtime metadata still consumes bounded host resources |
+| evidence forgery | evidence written outside the untrusted container, then bundled and verified | SHA-256 proves bytes, not human identity |
+| archive traversal | exact member set, path/type/size checks | verification still consumes bounded CPU and memory |
+| mutable supply chain | exact action SHAs, fixed direct tool versions, OIDC release | transitive Python resolution is recorded but not fully hash-locked yet |
 
-## Out of scope for version 0.1
+## Mode-specific claims
 
-- complete malware containment;
-- proof that tests are sufficient;
-- semantic equivalence;
-- model or author attribution;
-- every encoded secret format;
-- creator identity attestation;
-- hosted multi-tenant execution;
-- automatic approval or merge.
+### Static mode
 
-## Planned controls
+PatchLab analyzes repository changes without executing project code. It can detect configured static risks. It cannot prove that tests pass.
 
-- Docker and Podman execution providers;
-- read-only mounts;
-- default-deny network mode;
-- CPU, memory, process, and disk limits;
-- signed attestations;
-- structured YAML parsing;
-- provenance integration;
-- policy approval signatures.
+### Isolated container mode
+
+PatchLab reduces direct host exposure with Linux container controls. It does not claim virtual-machine isolation or defense against a container-runtime or kernel vulnerability.
+
+### Native mode
+
+PatchLab applies process hygiene only. Treat the project code as trusted. Do not use this mode for unknown pull requests.
+
+## Out of scope
+
+- a compromised maintainer account;
+- a compromised GitHub runner or host kernel;
+- malicious changes to a caller workflow that simply skip PatchLab;
+- complete semantic program verification;
+- perfect secret detection;
+- attribution of AI-generated code;
+- automatic merge approval;
+- hosted multi-tenant execution.

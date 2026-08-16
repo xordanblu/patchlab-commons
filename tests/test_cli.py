@@ -153,7 +153,7 @@ class CliTests(unittest.TestCase):
         directory = Path(tempfile.mkdtemp())
         self.assertEqual(main(["init", "--directory", str(directory)]), 0)
         workflow = (directory / ".github" / "workflows" / "patchlab.yml").read_text(encoding="utf-8")
-        self.assertIn("uses: xordanblu/patchlab-commons@v0.1.0", workflow)
+        self.assertIn("uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5", workflow)
         self.assertIn("config-source: base", workflow)
         self.assertNotIn("pip install -e .", workflow)
         self.assertIn("persist-credentials: false", workflow)

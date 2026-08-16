@@ -65,7 +65,7 @@
     <nav>
       <a class="brand" href="index.html" aria-label="PatchLab Commons home"><img src="assets/mark.svg" width="34" height="34" alt=""><span>PatchLab Commons</span></a>
       <div class="links">
-        <a href="../README.md">Docs</a>
+        <a href="https://github.com/xordanblu/patchlab-commons#readme">Docs</a>
         <a href="ARCHITECTURE.md">Architecture</a>
         <a href="THREAT_MODEL.md">Security</a>
         <a href="https://github.com/xordanblu/patchlab-commons">GitHub</a>
@@ -75,12 +75,12 @@
     <main>
       <div class="hero">
         <div>
-          <div class="eyebrow">Open source · Evidence first · Human controlled</div>
+          <div class="eyebrow">v0.2.0 Alpha · Evidence first · Human controlled</div>
           <h1>Make every patch prove its case.</h1>
-          <p class="lead">PatchLab compares the broken state with the proposed fix. It runs independent checks and creates a portable Patch Passport for maintainers.</p>
+          <p class="lead">PatchLab compares the broken state with the proposed fix. Static mode does not execute candidate code. Linux container mode runs bounded checks and creates a portable Patch Passport.</p>
           <div class="actions">
             <a class="button primary" href="https://github.com/xordanblu/patchlab-commons">View on GitHub</a>
-            <a class="button" href="../README.es.md">Leer en español</a>
+            <a class="button" href="https://github.com/xordanblu/patchlab-commons/blob/main/README.es.md">Leer en español</a>
           </div>
         </div>
         <div class="terminal" aria-label="PatchLab command example">
@@ -111,7 +111,7 @@ Blocked: write permission, unsafe trigger</pre>
           <div class="card"><b>Review new powers</b><p>Detect permission, network, dependency, secret, and workflow changes.</p></div>
           <div class="card"><b>Carry the evidence</b><p>Export JSON, Markdown, SARIF, and a deterministic archive with SHA-256.</p></div>
           <div class="card"><b>Trust the base policy</b><p>A candidate patch cannot silently weaken the rules used to judge itself.</p></div>
-          <div class="card"><b>Protect the output</b><p>Bounded archives, safe paths, atomic writes, and strict verification reduce evidence tampering.</p></div>
+          <div class="card"><b>Choose a boundary</b><p>Use static review by default or a fail-closed Linux container with network and resource limits.</p></div>
           <div class="card"><b>Keep people in control</b><p>PatchLab can block or request review. It does not merge or approve code.</p></div>
         </div>
       </section>

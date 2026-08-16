@@ -2,27 +2,9 @@
 
 ## Safe baseline
 
-PatchLab needs the full history for both selected commits.
+Use `pull_request`, read-only permissions, full Git history, and no persisted checkout credentials.
 
-```yaml
-- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-  with:
-    fetch-depth: 0
-    persist-credentials: false
-```
-
-Use read-only permissions:
-
-```yaml
-permissions:
-  contents: read
-```
-
-Use `pull_request`, not `pull_request_target`, for untrusted contributor code.
-
-Do not expose repository secrets to the verification job.
-
-## Complete example
+Every external action below is pinned to a reviewed 40-character commit SHA.
 
 ```yaml
 name: PatchLab Passport
@@ -39,29 +21,28 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
-      # Install target-project dependencies here when its tests need them.
-
-      - name: Verify patch
+      - name: Verify patch without executing project code
         id: patchlab
-        uses: xordanblu/patchlab-commons@v0.1.0
+        uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5
         with:
           base: ${{ github.event.pull_request.base.sha }}
           head: ${{ github.event.pull_request.head.sha }}
           repository: .
           config: patchlab.toml
           config-source: base
+          execution-mode: static
           output: .patchlab/out
-          fail-on-review: "true"
+          fail-on-review: "false"
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: patchlab-passport
@@ -69,77 +50,77 @@ jobs:
           if-no-files-found: error
 ```
 
+The full SHA points to the reviewed v0.2.0 security core. Dependabot can propose later SHA updates.
+
+## Dynamic verification
+
+Static mode does not run configured project commands.
+
+To run them, use a Linux runner and a digest-pinned image:
+
+```yaml
+      - name: Verify patch in an isolated container
+        uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5
+        with:
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
+          config-source: base
+          execution-mode: container
+          container-runtime: docker
+          container-image: ghcr.io/example/project-test@sha256:<64 lowercase hex characters>
+          network: "false"
+          fail-on-review: "true"
+```
+
+The image must already contain every tool needed by the configured commands. PatchLab does not install candidate dependencies during bootstrap.
+
 ## Inputs
 
 | Input | Required | Default | Meaning |
 |---|---:|---|---|
 | `base` | yes | none | trusted base Git ref or commit |
 | `head` | yes | none | candidate Git ref or commit |
-| `repository` | no | `.` | checked-out repository directory |
-| `config` | no | `patchlab.toml` | policy file relative to the repository |
-| `config-source` | no | `base` | revision that supplies policy |
-| `output` | no | `.patchlab/out` | report directory |
-| `fail-on-review` | no | `true` | fail the job for `review` findings |
+| `repository` | no | `.` | checked-out repository below `GITHUB_WORKSPACE` |
+| `config` | no | `patchlab.toml` | policy path relative to the repository |
+| `config-source` | no | `base` | `base`, `head`, or `working-tree` |
+| `output` | no | `.patchlab/out` | report directory below the repository |
+| `fail-on-review` | no | `true` | convert review findings into job failure |
+| `execution-mode` | no | `static` | `static`, `auto`, or `container` |
+| `container-runtime` | no | `auto` | `auto`, `docker`, or `podman` |
+| `container-image` | no | empty | immutable image digest or local image ID |
+| `network` | no | `false` | enable network inside the command container |
 
-`config-source: base` is the safe pull-request default. It stops the candidate revision from replacing its own approval policy.
-
-The first installation is a bootstrap change. Merge `patchlab.toml` and the workflow into the default branch before using `config-source: base` on later pull requests. A policy that exists only in the candidate revision is not trusted by the safe default.
+The action never permits native mode.
 
 ## Outputs
 
-| Output | Meaning |
-|---|---|
-| `outcome` | `pass`, `needs_review`, or `fail` |
-| `report` | path to `report.json` |
-| `markdown` | path to `report.md` |
-| `sarif` | path to `results.sarif` |
-| `passport` | path to `passport.json` |
-| `bundle` | path to `patchlab-passport.tar.gz` |
-| `bundle-sha256` | bundle digest |
-| `sidecar` | path to `patchlab-passport.tar.gz.sha256` |
-| `exit-code` | PatchLab process exit code |
+- `outcome`: `pass`, `needs_review`, or `fail`.
+- `report`: `report.json` path.
+- `markdown`: `report.md` path.
+- `sarif`: `results.sarif` path.
+- `passport`: `passport.json` path.
+- `bundle`: verified bundle path.
+- `bundle-sha256`: verified bundle digest.
+- `sidecar`: digest sidecar path.
+- `exit-code`: `0` or `1`.
 
-The action also appends `report.md` to the GitHub job summary.
+The action derives outputs from the in-memory trusted result. It verifies the bundle before publishing paths or digests.
 
-## Project dependencies
+## Bootstrap boundary
 
-PatchLab does not guess a package manager.
+The action runs its entry point with Python `-I -S` from `github.action_path`. It does not use `pip`, module discovery, inline Python, or the caller directory during bootstrap.
 
-Install only the dependencies needed by your configured commands. Avoid setup steps that read contributor-controlled package scripts with secrets or write permissions available.
-
-For untrusted code, use an ephemeral runner. A container or virtual machine provides a stronger boundary than a normal hosted job.
+Do not invoke the action as `uses: ./` from the same untrusted repository. The action rejects that layout. Use the published action or a separately checked-out trusted copy.
 
 ## Fork pull requests
 
-GitHub fork content is untrusted.
+Keep all of these properties:
 
-Keep these properties:
-
-- event: `pull_request`;
+- event `pull_request`;
+- no `pull_request_target`;
 - `contents: read` only;
-- no repository secrets;
-- no cloud credentials;
+- no repository, cloud, package, or deployment secrets;
 - `persist-credentials: false`;
-- no deployment or publication step;
-- bounded job timeout.
-
-Artifact upload is acceptable because the standard workflow token does not need repository-content write access for that operation.
-
-## Policy protection
-
-Require owner review for:
-
-- `patchlab.toml`;
-- the PatchLab workflow;
-- test runner scripts;
-- dependency installation scripts;
-- release workflows;
-- `action.yml` when PatchLab is used from the same repository.
-
-The repository includes a `CODEOWNERS` baseline for these files.
-
-## Pin external actions
-
-Use a reviewed 40-character commit SHA.
-
-A major tag such as `@v4` is readable, but it can move. Keep the release tag as a comment so Dependabot can still identify the intended line.
+- no publication or deployment step;
+- a bounded timeout;
+- isolated container mode for untrusted commands.

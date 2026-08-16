@@ -4,46 +4,47 @@
 
 <p align="center">
   <strong>Evidence-first verification for software patches.</strong><br>
-  Compare two Git revisions. Run trusted checks. Detect risky changes. Create a portable Patch Passport.
+  Compare two Git revisions. Review new capabilities. Run bounded checks. Create a portable Patch Passport.
 </p>
 
 <p align="center">
   <a href="README.es.md">Español</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="docs/GITHUB_ACTION.md">GitHub Action</a> ·
   <a href="docs/PATCH_PASSPORT_SPEC.md">Passport specification</a> ·
   <a href="docs/THREAT_MODEL.md">Threat model</a> ·
   <a href="SECURITY.md">Security</a>
 </p>
 
-> **Status:** `0.1.0-alpha`. The complete core workflow is functional and tested. PatchLab is an evidence tool. It is not a proof of correctness or a replacement for human review.
+> **Status:** `0.2.0` Alpha. The core workflow is functional and tested. PatchLab records evidence. It does not prove that a patch is correct, complete, or free of vulnerabilities. Human review remains required.
 
 ## Why PatchLab exists
 
 A pull request can look convincing and still be unsafe.
 
-The same person or coding agent can write a patch, add a weak test, run that test, and declare success. A normal line diff also hides important questions:
+The same person or coding agent can write a patch, add a weak test, run that test, and declare success. A line diff also leaves important questions unanswered:
 
 - Did the reported defect exist before the patch?
 - Does the same reproduction pass after the patch?
 - Were tests deleted, skipped, or weakened?
 - Did the patch add write permissions, network access, secrets, binaries, or dependencies?
-- Which exact commits and policy produced the approval result?
+- Which exact commits, policy, and execution boundary produced the result?
 
-PatchLab records answers as reviewable evidence.
+PatchLab records those answers as reviewable evidence.
 
-## What it produces
+## What PatchLab produces
 
 ```text
 .patchlab/out/
 ├── report.json                     machine-readable source of truth
 ├── report.md                       maintainer summary
 ├── results.sarif                   SARIF 2.1.0 findings
-├── passport.json                   artifact digest manifest
+├── passport.json                   artifact and identity manifest
 ├── patchlab-passport.tar.gz        portable evidence bundle
 └── patchlab-passport.tar.gz.sha256 external integrity value
 ```
 
-A **Patch Passport** binds the selected commits, trusted policy, command results, static findings, reports, byte sizes, and SHA-256 digests into one bounded archive.
+A **Patch Passport** binds the selected commits, trusted policy, execution identity, command results, static findings, reports, byte sizes, and SHA-256 digests into one bounded archive.
 
 ## Core capabilities
 
@@ -61,19 +62,19 @@ timeout_seconds = 120
 required = true
 ```
 
-### Run independent verification
+### Keep policy independent
 
-PatchLab can run tests, builds, linters, or project-specific scripts from policy stored in the trusted base revision.
+Pull-request verification loads `patchlab.toml` from the **base revision by default**. A candidate cannot silently replace the policy used to judge itself.
 
-Commands are argument arrays. PatchLab does not invoke a shell.
+PatchLab also materializes snapshots directly from Git tree and blob objects. It does not use checkout filters, hooks, worktrees, or `git archive`. Candidate-controlled `export-ignore` rules cannot remove files from the executed snapshot.
 
 ### Detect review risks
 
-The current rules cover:
+The deterministic rules cover:
 
 - files and line counts outside the approved scope;
 - dependency manifests and lockfiles;
-- GitHub Actions workflow changes;
+- GitHub Actions changes;
 - write permissions and `pull_request_target`;
 - persisted checkout credentials;
 - mutable third-party action references;
@@ -81,29 +82,50 @@ The current rules cover:
 - sensitive files and possible hard-coded credentials;
 - possible secret logging;
 - new network clients and URLs;
-- deleted test files and removed assertions;
-- new skips, expected failures, and failure suppression;
+- deleted tests, removed assertions, skips, and failure suppression;
 - binary and likely generated artifacts;
-- attempts to weaken `patchlab.toml` inside the candidate patch;
-- mismatches between Git's changed-file metadata and parsed diff evidence.
+- attempts to weaken `patchlab.toml`;
+- mismatches between Git metadata and parsed diff evidence.
 
-### Create verifiable output
+### Choose an execution boundary
 
-The archive format normalizes file order, timestamps, ownership, permissions, and gzip metadata. The verifier rejects unexpected members, duplicate names, unsafe paths, malformed digest records, and oversized content.
+PatchLab supports these modes:
 
-PatchLab publishes strict JSON Schemas for both `report.json` and `passport.json`.
+| Mode | Executes project code | Intended use |
+|---|---:|---|
+| `static` | No | Default. Review changes without running candidate code. |
+| `container` | Yes | Linux with Docker or Podman and a pinned image. |
+| `auto` | When an isolated provider is available | Fails closed when commands are required and isolation is unavailable. |
+| `native` | Yes | Trusted local code only. Requires explicit acceptance. |
 
-## Fast local start
+Container mode uses a non-root user, a read-only root file system, a read-only source snapshot, removed Linux capabilities, `no-new-privileges`, default-deny network access, and CPU, memory, PID, time, output, and temporary-space limits.
 
-PatchLab requires Python 3.11 or newer and Git.
+Container mode reduces direct host exposure. It is not a virtual-machine boundary. Containers still share the host kernel.
+
+Native mode is a weak boundary. It does not stop project code from reading files available to the current user, using the host network, or attacking the host. Do not use native mode for unknown pull requests.
+
+## Install
+
+PatchLab requires Python 3.11 through 3.14 and Git.
+
+From a checked-out source tree:
 
 ```bash
-git clone https://github.com/xordanblu/patchlab-commons.git
-cd patchlab-commons
-python -m pip install -e .
+python -I -m pip install --no-deps .
 patchlab --version
 patchlab doctor
 ```
+
+For development:
+
+```bash
+python -I -m pip install -r requirements-dev.txt -e .
+make verify
+```
+
+The runtime package declares no third-party Python dependencies.
+
+## Start locally
 
 Create a configuration and a read-only GitHub workflow:
 
@@ -111,7 +133,7 @@ Create a configuration and a read-only GitHub workflow:
 patchlab init
 ```
 
-Compare two commits:
+Static verification does not execute project code:
 
 ```bash
 patchlab verify \
@@ -119,8 +141,26 @@ patchlab verify \
   --head HEAD \
   --config patchlab.toml \
   --config-source base \
+  --execution-mode static \
   --output .patchlab/out
 ```
+
+Run project commands inside an isolated Linux container:
+
+```bash
+patchlab verify \
+  --base HEAD~1 \
+  --head HEAD \
+  --config patchlab.toml \
+  --config-source base \
+  --execution-mode container \
+  --container-runtime docker \
+  --container-image 'python@sha256:<64-hex-digest>' \
+  --no-network \
+  --output .patchlab/out
+```
+
+The image must use a registry digest or an immutable local image ID.
 
 Verify a received bundle:
 
@@ -128,33 +168,22 @@ Verify a received bundle:
 patchlab verify-passport .patchlab/out/patchlab-passport.tar.gz
 ```
 
-## Two end-to-end demonstrations
-
-A valid defect correction must pass:
-
-```bash
-python scripts/run_demo.py --output .patchlab/demo
-```
-
-A privileged workflow change must fail and still produce valid evidence:
-
-```bash
-python scripts/run_attack_demo.py --output .patchlab/blocked-demo
-```
-
-The blocked demonstration detects write permission, `pull_request_target`, persisted credentials, an unpinned action, remote script execution, and new network access.
-
-Ready-to-inspect outputs live in [`examples/sample-passport`](examples/sample-passport) and [`examples/blocked-passport`](examples/blocked-passport).
-
 ## Configuration
-
-Pull-request verification loads `patchlab.toml` from the **base revision by default**. A candidate cannot silently replace the policy used to judge itself.
-
-For a first installation, merge `patchlab.toml` into the default branch before enabling the pull-request workflow. Later runs can then load the trusted policy from the base revision.
 
 ```toml
 [project]
 name = "example-project"
+
+[execution]
+mode = "static"
+container_runtime = "auto"
+container_image = ""
+network = false
+memory_mb = 1024
+cpus = 1.0
+pids_limit = 128
+tmpfs_mb = 64
+allow_unsafe_native = false
 
 [scope]
 allow = ["src/**", "tests/**", "pyproject.toml", ".github/workflows/**"]
@@ -175,26 +204,18 @@ generated_files = "review"
 fail_on_review = false
 require_clean_worktree = false
 require_human_review = true
-
-[[commands]]
-name = "tests"
-command = ["python", "-m", "unittest", "discover", "-s", "tests", "-v"]
-run_on = "head"
-expected_exit = "zero"
-timeout_seconds = 300
-required = true
 ```
 
-Policy decisions are `allow`, `review`, or `deny`.
-
-PatchLab rejects unknown configuration keys. A spelling error cannot silently fall back to a weaker default.
+Policy decisions are `allow`, `review`, or `deny`. Unknown keys are rejected. A spelling error cannot silently select a weaker default.
 
 See [`docs/RULES.md`](docs/RULES.md) and [`examples/patchlab.toml`](examples/patchlab.toml).
 
 ## GitHub Action
 
+Use a published action or a separate trusted checkout. Do not use `uses: ./` from the candidate repository for an untrusted pull request.
+
 ```yaml
-- uses: xordanblu/patchlab-commons@v0.1.0
+- uses: xordanblu/patchlab-commons@d152f4a4dc806359006e668e306ceb1d0c2bcfb5
   id: patchlab
   with:
     base: ${{ github.event.pull_request.base.sha }}
@@ -202,80 +223,81 @@ See [`docs/RULES.md`](docs/RULES.md) and [`examples/patchlab.toml`](examples/pat
     repository: .
     config: patchlab.toml
     config-source: base
+    execution-mode: static
     output: .patchlab/out
     fail-on-review: "true"
 ```
 
-The checkout must contain full history and must not persist credentials:
+The example pins the hardened action implementation to a full commit SHA. Review the selected commit before use.
+
+The caller workflow must use `pull_request`, read-only permissions, full Git history, and no persisted checkout credentials. It must not expose secrets to candidate code.
 
 ```yaml
-- uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+permissions:
+  contents: read
+
+- uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
   with:
     fetch-depth: 0
     persist-credentials: false
 ```
 
-The included action appends `report.md` to the GitHub job summary and exposes paths for JSON, SARIF, passport, bundle, digest, outcome, and exit code.
-
 See [`examples/github-action.yml`](examples/github-action.yml) and [`docs/GITHUB_ACTION.md`](docs/GITHUB_ACTION.md).
+
+## Demonstrations
+
+A valid defect correction must pass:
+
+```bash
+python -I scripts/run_demo.py --output .patchlab/demo
+patchlab verify-passport .patchlab/demo/patchlab-passport.tar.gz
+```
+
+A privileged workflow change must fail and still produce valid evidence:
+
+```bash
+python -I scripts/run_attack_demo.py --output .patchlab/blocked-demo
+patchlab verify-passport .patchlab/blocked-demo/patchlab-passport.tar.gz
+```
+
+Ready-to-inspect outputs live in [`examples/sample-passport`](examples/sample-passport) and [`examples/blocked-passport`](examples/blocked-passport).
 
 ## Security boundary
 
-PatchLab reduces inherited environment variables. It uses a disposable home and temporary directory for each command. It removes normal user configuration, closes standard input, bounds captured output, redacts common credential forms, applies timeouts, and terminates the command process group on supported systems.
+PatchLab protects its coordinator from common Python import replacement and hostile Git process variables. The composite action starts Python with isolated and no-site flags. It imports only the action's own source tree. It does not run `pip` during bootstrap.
 
-PatchLab also disables Git hooks, file-system monitors, external diff programs, text conversion filters, global configuration, prompts, and pagers during repository inspection.
+Git operations use a minimal, non-interactive environment. Snapshots have file-count, member-size, total-size, path, file-mode, and symbolic-link limits.
 
-Configured commands still execute project code. Git worktrees separate revisions. They are **not** an operating-system sandbox.
+The trusted coordinator writes and verifies final evidence outside the untrusted container.
 
-Use disposable CI workers. Use a container or virtual machine when the compared code is not trusted. Never expose repository secrets to a pull-request verification job.
+Read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md), [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), and [`SECURITY.md`](SECURITY.md) before security-sensitive use.
 
-Output paths inside the repository cannot traverse parents or follow symbolic links. Bundle verification is read-only and bounded.
+## Development and validation
 
-Read [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md) before using PatchLab for security-sensitive review.
+```bash
+make compile
+make test
+make coverage
+make demos
+make checks
+```
+
+Hosted CI is configured for Python 3.11, 3.12, 3.13, and 3.14 on Linux, macOS, and Windows. Separate jobs test coverage, packaging, action bootstrap resistance, real Linux container isolation, demonstrations, and CodeQL.
+
+A hosted check is authoritative only after it runs in GitHub. Local claims and remote evidence are kept separate in [`docs/VALIDATION.md`](docs/VALIDATION.md).
 
 ## Design principles
 
 1. **Evidence before confidence.** A claim is not proof.
 2. **Independent policy.** A patch does not define its own approval standard.
-3. **Least privilege.** Normal verification needs read-only repository access.
-4. **Deterministic decisions.** Core approval logic does not require an AI model.
-5. **Human authority.** Maintainers retain the final decision.
-6. **Portable records.** Evidence remains useful outside one platform.
-7. **Bilingual access.** Core user documentation exists in English and Spanish.
-8. **No fake adoption.** Impact means verified external use, not purchased metrics.
-
-## Development
-
-```bash
-python -m pip install -e ".[dev]"
-make compile
-make coverage
-make demo
-make attack-demo
-make build
-```
-
-The runtime package has no third-party Python dependencies.
-
-CI tests Python 3.11, 3.12, and 3.13 on Linux, macOS, and Windows. It also builds the wheel, enforces coverage, runs both demonstrations, and performs CodeQL analysis.
-
-## Project documents
-
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
-- [`docs/PATCH_PASSPORT_SPEC.md`](docs/PATCH_PASSPORT_SPEC.md)
-- [`docs/report.schema.json`](docs/report.schema.json)
-- [`docs/passport.schema.json`](docs/passport.schema.json)
-- [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md)
-- [`docs/RULES.md`](docs/RULES.md)
-- [`docs/ROADMAP.md`](docs/ROADMAP.md)
-- [`docs/IMPACT.md`](docs/IMPACT.md)
-- [`docs/VALIDATION.md`](docs/VALIDATION.md)
-- [`GOVERNANCE.md`](GOVERNANCE.md)
-- [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- [`SECURITY.md`](SECURITY.md)
-- [`SUPPORT.md`](SUPPORT.md)
-- [`docs/RELEASING.md`](docs/RELEASING.md)
+3. **Fail closed.** Missing isolation cannot silently become native execution.
+4. **Least privilege.** Normal verification needs read-only repository access.
+5. **Deterministic decisions.** Core approval logic does not require an AI model.
+6. **Human authority.** Maintainers retain the final decision.
+7. **Portable records.** Evidence remains useful outside one platform.
+8. **Bilingual access.** Core user documentation exists in English and Spanish.
+9. **No fake adoption.** Impact means verified external use, not purchased metrics.
 
 ## License
 
-Apache License 2.0. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+Apache License 2.0. See [`LICENSE`](LICENSE).

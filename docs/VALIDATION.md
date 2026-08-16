@@ -1,5 +1,7 @@
 # Validation record — v0.1.0-alpha
 
+> **Historical record.** This file describes the local v0.1.0-alpha evidence only. It does not describe v0.2.0. It does not replace hosted CI, CodeQL, container E2E, release hashes, or attestations.
+
 Date: 2026-08-16
 
 This record describes the checks completed before the first PatchLab Commons release candidate. It records evidence, not a claim of perfect correctness.
@@ -25,7 +27,7 @@ Ran 111 tests
 OK
 ```
 
-Branch-aware coverage over `src/patchlab` was 91%.
+Branch-aware coverage over the original import package was 91%.
 
 ```text
 TOTAL  1664 statements  560 branches  91% combined coverage

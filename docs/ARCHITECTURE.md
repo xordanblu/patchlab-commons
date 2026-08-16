@@ -2,142 +2,161 @@
 
 ## Goal
 
-PatchLab Commons creates reproducible evidence for a change between two Git commits.
+PatchLab Commons creates reviewable evidence for a change between two Git commits.
 
 The core does not require a model, network service, database, or repository write token.
+
+## Trust model
+
+PatchLab separates four kinds of data:
+
+1. **Trusted coordinator code.** The installed CLI or published action.
+2. **Trusted policy.** `patchlab.toml` from the selected base revision by default.
+3. **Untrusted repository data.** Commit trees, diffs, paths, source files, and command output.
+4. **Generated evidence.** Reports and the Patch Passport, written by the coordinator outside the untrusted command boundary.
+
+The candidate revision never gains policy authority merely because it contains instructions or configuration text.
 
 ## Data flow
 
 ```text
-patchlab.toml
-     │
-     ▼
-Configuration loader ───────┐
-                            │
-Git base ref ──► worktree ──┼─► configured commands
-                            │
-Git head ref ──► worktree ──┘
-     │                │
-     └──── Git diff ──┴─► deterministic policy checks
-                              │
-                              ▼
-                      Verification report
-                         │    │    │
-                         ▼    ▼    ▼
-                       JSON Markdown SARIF
-                         └────┬────┘
-                              ▼
-                    Patch Passport bundle
-                         + SHA-256
+trusted base policy ───────────────┐
+                                  │
+Git base commit ─► object snapshot├─► static checks
+Git head commit ─► object snapshot│
+                                  ├─► optional isolated commands
+Git diff ─────────────────────────┘
+                                  │
+                                  ▼
+                         trusted coordinator
+                                  │
+                       JSON / Markdown / SARIF
+                                  │
+                                  ▼
+                     Patch Passport + SHA-256
 ```
 
 ## Components
 
 ### Configuration loader
 
-`src/patchlab_commons/config.py` parses TOML with the Python standard library. It validates every supported field and rejects shell-string commands.
+`src/patchlab_commons/config.py` parses TOML with the Python standard library.
+It rejects unknown fields, shell-string commands, mutable container image tags, invalid limits, credential-like environment grants, and native execution without explicit consent.
 
 ### Git adapter
 
-`src/patchlab_commons/gitutils.py` resolves refs, reads commit metadata, obtains diffs, and creates detached worktrees.
+`src/patchlab_commons/gitutils.py` resolves refs and reads Git objects through a minimal process environment.
 
-NUL-delimited Git metadata preserves exact paths for spaces, renames, binary files, and unusual names. Parsed diff hunks are aligned with this authoritative metadata.
+It removes or overrides variables that can redirect the repository, object database, index, configuration, hooks, diff tools, SSH, or credentials. It disables prompts, pagers, hooks, external diff, text conversion, file protocol access, and file-system monitors.
 
-Every Git command disables repository hooks, file-system monitors, global and system configuration, terminal prompts, and pagers. Unified diff generation also disables external diff and text conversion programs. Git output is spooled to temporary files and size-limited before it enters memory. A mismatch between authoritative changed-file metadata and parsed file diffs creates a blocking integrity finding.
+Command snapshots do not use `git checkout`, a worktree, or `git archive`. PatchLab reads the selected tree and blob objects directly. This prevents checkout filters, hooks, and `export-ignore` rules from changing the code that is executed.
 
-PatchLab compares commit objects. Uncommitted working-tree files are not silently included.
+The materializer:
+
+- applies file-count, per-file, and total-byte limits;
+- rejects gitlinks and unsupported modes;
+- rejects `.git`, absolute, parent, nonportable, and invalid UTF-8 paths;
+- writes ordinary files before symbolic links;
+- rejects symbolic links that escape the snapshot;
+- never includes Git metadata.
 
 ### Command runner
 
-`src/patchlab_commons/runner.py` executes argument arrays without a shell.
+`src/patchlab_commons/runner.py` supports three boundaries.
 
-For each command it creates a disposable home and temporary directory. It removes unapproved environment variables, closes standard input, disables normal user configuration, captures output through temporary files, bounds stored output, redacts common credential forms, applies a timeout, and terminates the process group where supported.
+#### Static
 
-This is process hygiene. It is not a complete operating-system sandbox.
+Static mode does not execute project code. It is the default.
 
-Each result records:
+#### Isolated container
 
-- phase;
-- command arguments;
-- expected exit policy;
-- exit code;
-- timeout state;
-- duration;
-- bounded standard output and error.
+Linux container mode uses Docker or Podman with:
 
-### Diff parser
+- an immutable image digest or local image ID;
+- a fixed non-root user;
+- all Linux capabilities removed;
+- `no-new-privileges`;
+- a read-only root file system;
+- a read-only source snapshot;
+- network disabled by default;
+- CPU, memory, PID, timeout, output, and temporary-space limits;
+- no Docker or Podman socket;
+- no host secrets or arbitrary environment inheritance.
 
-`src/patchlab_commons/diffparse.py` converts a unified Git diff into file and line records. Static checks inspect only additions or deletions relevant to their rule.
+Base and head commands run in separate disposable containers. The trusted process creates evidence after each command exits.
+
+#### Native
+
+Native mode uses argument arrays without a shell. It cleans the environment, creates a disposable home and temporary directory, bounds output, applies a timeout, and terminates descendant processes where supported.
+
+Native mode is a weak boundary. It does not stop project code from reading files available to the current user, using the host network, or attacking the host kernel. It requires explicit `allow_unsafe_native = true`.
+
+### Composite action bootstrap
+
+`scripts/action_entry.py` runs with Python isolated and no-site flags from the action directory. It imports `patchlab_commons` only from the action's own `src` directory.
+
+The action does not run `pip`, `python -m patchlab_commons`, inline Python, or package discovery from the caller repository during bootstrap. It rejects `uses: ./` when the action itself is inside the candidate repository.
 
 ### Policy checks
 
-`src/patchlab_commons/checks/` contains independent checks.
+`src/patchlab_commons/checks/` contains deterministic checks for:
 
-| Module | Responsibility |
-|---|---|
-| `scope.py` | file and line limits, binary and generated outputs |
-| `dependencies.py` | manifests, lockfiles, and supported dependency deltas |
-| `workflows.py` | GitHub Actions triggers, permissions, credentials, and action pinning |
-| `secrets.py` | sensitive paths, key headers, hard-coded values, and logging |
-| `network.py` | new network client and URL capability |
-| `tests.py` | removed tests, assertions, skips, and failure suppression |
+- scope and size;
+- dependency changes;
+- workflow permissions and triggers;
+- action pinning and checkout credentials;
+- possible secrets;
+- new network capability;
+- test deletion or weakening;
+- binary and generated outputs;
+- policy self-modification.
 
-A check returns findings. It does not modify code.
+Checks return findings. They do not modify code.
 
 ### Engine
 
-`src/patchlab_commons/engine.py` coordinates the comparison.
+`src/patchlab_commons/engine.py`:
 
-It:
+1. resolves base and head commits;
+2. loads policy from the trusted source;
+3. calculates the authoritative changed-file set and diff;
+4. runs deterministic checks;
+5. selects one execution boundary;
+6. executes required evidence commands when allowed;
+7. calculates `pass`, `needs_review`, or `fail`;
+8. writes reports through the trusted coordinator;
+9. creates and verifies the Patch Passport.
 
-1. resolves both refs;
-2. builds the static check context;
-3. executes configured commands in each required worktree;
-4. creates command-failure findings;
-5. calculates `pass`, `needs_review`, or `fail`;
-6. writes reports;
-7. creates the evidence bundle.
+### Safe output and evidence
 
-### Safe output
+`safeio.py` rejects parent traversal and symbolic-link redirection. It uses atomic replacement for regular output files.
 
-`src/patchlab_commons/safeio.py` keeps relative output below the repository root. It rejects symbolic-link redirection and writes regular files through temporary files and atomic replacement.
-
-### Reporting
-
-`src/patchlab_commons/reporting.py` writes JSON and Markdown. Dynamic Markdown values are flattened and enclosed in safe code spans or escaped text.
-
-`src/patchlab_commons/sarif.py` maps findings into SARIF 2.1.0.
-
-`src/patchlab_commons/schema.py` publishes strict JSON Schemas for the report and passport manifest.
-
-### Passport builder
-
-`src/patchlab_commons/passport.py` calculates SHA-256 digests and writes a deterministic archive.
-
-The archive builder enforces member and total size limits. The verifier requires the exact member set and validates manifest types before hashing.
-
-The archive builder normalizes:
-
-- file order;
-- timestamps;
-- user and group identifiers;
-- user and group names;
-- file modes;
-- gzip timestamp.
+`passport.py` enforces an exact archive member set, member types, byte limits, safe paths, SHA-256 digests, and schema-valid identity data. The archive profile normalizes order, timestamps, ownership, and modes.
 
 ## Outcome rules
 
 ```text
-Any deny finding              → fail
-Any review finding            → needs_review
-Any review finding + strict   → fail
-No deny or review findings    → pass
+Any deny finding                    -> fail
+Any review finding                  -> needs_review
+Any review finding + strict policy  -> fail
+No deny or review finding           -> pass
 ```
 
-A failed required command creates a deny finding.
+A missing safe executor is a deny finding when dynamic commands are required.
 
-## Extension points
+## Platform support
 
-New checks should remain pure where possible. They should receive `CheckContext` and return `Finding` objects.
+- CLI and static checks: Linux, macOS, and Windows.
+- Native boundary: Linux, macOS, and Windows, with platform-specific process limits.
+- Isolated container boundary: Linux with Docker or Podman.
 
-Future isolation providers can implement the same command-result contract while using containers, virtual machines, or operating-system sandboxes.
+## Non-claims
+
+PatchLab does not prove:
+
+- complete malware containment;
+- correctness of the patch;
+- completeness of the tests;
+- author identity;
+- semantic equivalence;
+- absence of every secret or vulnerability.

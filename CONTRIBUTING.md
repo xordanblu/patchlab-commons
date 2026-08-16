@@ -13,12 +13,12 @@ Security vulnerabilities must follow [`SECURITY.md`](SECURITY.md). Do not publis
 ```bash
 python -m venv .venv
 . .venv/bin/activate
-python -m pip install -e ".[dev]"
+python -m pip install -r requirements-dev.txt -e .
 make compile
 make test
-make demo
-make attack-demo
+make demos
 make coverage
+make checks
 ```
 
 On Windows PowerShell, activate the environment with:
@@ -37,7 +37,10 @@ A pull request must:
 - update English and Spanish user documentation when the user interface changes;
 - avoid unrelated formatting changes;
 - avoid generated files unless the generation process is documented;
-- pass the complete test suite;
+- pass the complete test suite and the 90 percent combined line-and-branch coverage floor;
+- preserve the fail-closed container boundary and action bootstrap controls;
+- pin every external GitHub Action to a full commit SHA;
+- update `AGENTS.md` only when contributor instructions truly change;
 - state whether an AI coding tool was used;
 - confirm that the author reviewed and understands every submitted line.
 
@@ -64,7 +67,7 @@ Examples:
 ```text
 Add Cargo dependency delta parsing
 Reject private-key files in scope check
-Document Windows worktree behavior
+Document Windows snapshot behavior
 ```
 
 ## Developer Certificate of Origin
