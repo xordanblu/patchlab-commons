@@ -2,8 +2,17 @@ from __future__ import annotations
 
 import unittest
 
-from patchlab.models import ChangedFile, Outcome, VerificationReport
+from patchlab.models import (
+    ChangedFile,
+    CommandResult,
+    Disposition,
+    Finding,
+    Outcome,
+    Severity,
+    VerificationReport,
+)
 from patchlab.reporting import render_markdown
+from patchlab.sarif import build_sarif
 
 
 class ReportingTests(unittest.TestCase):
@@ -27,11 +36,20 @@ class ReportingTests(unittest.TestCase):
                 "blocking_findings": 0,
                 "review_findings": 0,
             },
-            changed_files=[ChangedFile(status="A", path=path, added_lines=1, deleted_lines=0)],
+            changed_files=[
+                ChangedFile(
+                    status="A",
+                    path=path,
+                    added_lines=1,
+                    deleted_lines=0,
+                )
+            ],
         )
 
     def test_malicious_filename_stays_inside_code_span(self) -> None:
-        markdown = render_markdown(self.report("` ![track](https://example.invalid/x) | name.py"))
+        markdown = render_markdown(
+            self.report("` ![track](https://example.invalid/x) | name.py")
+        )
         changed_line = next(line for line in markdown.splitlines() if "track" in line)
         self.assertIn("`` ` ![track](https://example.invalid/x) \\| name.py ``", changed_line)
 
@@ -40,6 +58,65 @@ class ReportingTests(unittest.TestCase):
         changed_line = next(line for line in markdown.splitlines() if "first" in line)
         self.assertIn("first second.py", changed_line)
         self.assertEqual(changed_line.count("|"), 5)
+
+    def test_command_exit_states_and_empty_recommendation_render(self) -> None:
+        report = self.report("artifact.bin")
+        report.changed_files = [
+            ChangedFile(
+                status="A",
+                path="artifact.bin",
+                added_lines=None,
+                deleted_lines=None,
+                binary=True,
+            )
+        ]
+        report.command_results = [
+            CommandResult(
+                name="timeout",
+                phase="head",
+                command=("python",),
+                required=True,
+                expected_exit="zero",
+                exit_code=None,
+                passed=False,
+                timed_out=True,
+                duration_seconds=1.0,
+                stdout="",
+                stderr="",
+            ),
+            CommandResult(
+                name="not-started",
+                phase="head",
+                command=("missing",),
+                required=False,
+                expected_exit="zero",
+                exit_code=None,
+                passed=False,
+                timed_out=False,
+                duration_seconds=0.0,
+                stdout="",
+                stderr="",
+            ),
+        ]
+        report.findings = [
+            Finding(
+                rule_id="PL-NOTE-001",
+                title="Information",
+                message="No file location",
+                severity=Severity.INFO,
+                disposition=Disposition.ALLOW,
+            )
+        ]
+        markdown = render_markdown(report)
+        self.assertIn("timeout", markdown)
+        self.assertIn("not started", markdown)
+        self.assertIn("binary", markdown)
+        self.assertNotIn("### Recommendations\n\n-", markdown)
+
+        sarif = build_sarif(report)
+        result = sarif["runs"][0]["results"][0]
+        self.assertEqual(result["level"], "note")
+        self.assertNotIn("locations", result)
 
 
 if __name__ == "__main__":
