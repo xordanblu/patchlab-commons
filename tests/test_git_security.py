@@ -51,7 +51,7 @@ class GitSecurityTests(unittest.TestCase):
     def test_git_operations_ignore_hostile_process_environment(self) -> None:
         repo = Path(tempfile.mkdtemp()) / "repo"
         init_repo(repo)
-        (repo / "file.txt").write_text("safe\n", encoding="utf-8")
+        (repo / "file.txt").write_bytes(b"safe\n")
         sha = commit_all(repo, "safe")
         hostile = {
             "GIT_DIR": "/definitely/not/the/repository",
@@ -69,9 +69,9 @@ class GitSecurityTests(unittest.TestCase):
     def test_git_replace_refs_cannot_substitute_selected_commit_objects(self) -> None:
         repo = Path(tempfile.mkdtemp()) / "repo"
         init_repo(repo)
-        (repo / "file.txt").write_text("safe\n", encoding="utf-8")
+        (repo / "file.txt").write_bytes(b"safe\n")
         safe_sha = commit_all(repo, "safe")
-        (repo / "file.txt").write_text("replacement\n", encoding="utf-8")
+        (repo / "file.txt").write_bytes(b"replacement\n")
         replacement_sha = commit_all(repo, "replacement")
         run_git(repo, "replace", safe_sha, replacement_sha)
 
