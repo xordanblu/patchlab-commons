@@ -99,7 +99,7 @@ jobs:
       - run: coverage run --branch -m unittest discover -s tests -v
       - run: coverage report --show-missing --fail-under=90
       - run: coverage xml -o coverage.xml
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           path: coverage.xml
@@ -159,7 +159,7 @@ jobs:
           SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
           export SOURCE_DATE_EPOCH
           python scripts/generate_sbom.py --output dist-one/patchlab-commons.spdx.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: python-distributions
           path: dist-one/
@@ -182,7 +182,7 @@ jobs:
       - run: patchlab verify-passport .patchlab/demo/patchlab-passport.tar.gz
       - run: python -I scripts/run_attack_demo.py --output .patchlab/blocked-demo
       - run: patchlab verify-passport .patchlab/blocked-demo/patchlab-passport.tar.gz
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: patchlab-demo-passports
           path: |
@@ -245,7 +245,7 @@ jobs:
           test ! -e consumer/BOOTSTRAP-HIJACKED
           test ! -e TOOL-HIJACKED
           patchlab verify-passport "${{ steps.patchlab.outputs.bundle }}"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: action-e2e-passport
           path: consumer/.patchlab/action-e2e/
